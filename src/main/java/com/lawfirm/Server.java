@@ -45,6 +45,7 @@ public class Server {
         System.out.println("Lawyer API: http://localhost:8082/api/lawyers");
         System.out.println("Case API: http://localhost:8082/api/cases");
         System.out.println("Appointment API: http://localhost:8082/api/appointments");
+
     }
 
     private static void serveFrontend(

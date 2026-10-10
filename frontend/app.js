@@ -435,3 +435,158 @@ async function refreshDashboard() {
 }
 
 refreshDashboard();
+
+const DOCUMENT_API = "/api/documents";
+
+const documentTable = document.getElementById("documentTable");
+const documentMessage = document.getElementById("documentMessage");
+const documentForm = document.getElementById("documentForm");
+const refreshDocumentsButton =
+    document.getElementById("refreshDocumentsButton");
+
+async function loadDocuments() {
+    if (!documentTable) return;
+
+    try {
+        const response = await fetch(DOCUMENT_API);
+        const documents = await response.json();
+
+        if (!response.ok) {
+            throw new Error(documents.error || "Unable to load documents");
+        }
+
+        documentTable.replaceChildren();
+
+        if (documents.length === 0) {
+            documentTable.innerHTML =
+                '<tr><td colspan="6">No document records found.</td></tr>';
+        }
+
+        documents.forEach(documentRecord => {
+            const row = document.createElement("tr");
+
+            addCell(row, documentRecord.documentId);
+            addCell(row, documentRecord.caseId);
+            addCell(row, documentRecord.uploadedBy);
+            addCell(row, documentRecord.category);
+            addCell(row, documentRecord.uploadDate);
+
+            const actionCell = addCell(row, "");
+            const deleteButton = document.createElement("button");
+
+            deleteButton.type = "button";
+            deleteButton.textContent = "Delete";
+            deleteButton.className = "delete-button";
+
+            deleteButton.addEventListener("click", async () => {
+                if (!confirm(
+                    `Delete document record ${documentRecord.documentId}?`
+                )) return;
+
+                try {
+                    const result = await fetch(
+                        `${DOCUMENT_API}?id=${documentRecord.documentId}`,
+                        { method: "DELETE" }
+                    );
+
+                    const data = await result.json();
+
+                    if (!result.ok) {
+                        throw new Error(
+                            data.error || "Unable to delete document"
+                        );
+                    }
+
+                    documentMessage.textContent =
+                        "Document record deleted successfully.";
+
+                    await loadDocuments();
+                } catch (error) {
+                    documentMessage.textContent = error.message;
+                }
+            });
+
+            actionCell.appendChild(deleteButton);
+            documentTable.appendChild(row);
+        });
+
+        documentMessage.textContent =
+            "Document records loaded successfully.";
+    } catch (error) {
+        documentTable.innerHTML =
+            '<tr><td colspan="6">Unable to load document records.</td></tr>';
+        documentMessage.textContent =
+            "Document loading failed: " + error.message;
+        console.error("Document loading failed:", error);
+    }
+}
+
+async function populateDocumentCases() {
+    const caseSelect = document.getElementById("documentCaseId");
+    if (!caseSelect) return;
+
+    try {
+        const response = await fetch("/api/cases");
+        const cases = await response.json();
+
+        if (!response.ok) {
+            throw new Error("Unable to load legal cases");
+        }
+
+        caseSelect.replaceChildren(
+            new Option("Select legal case", "")
+        );
+
+        cases.forEach(legalCase => {
+            caseSelect.add(new Option(
+                `Case #${legalCase.caseId} — ${legalCase.category || "General"}`,
+                legalCase.caseId
+            ));
+        });
+    } catch (error) {
+        documentMessage.textContent =
+            "Unable to load cases: " + error.message;
+    }
+}
+
+documentForm?.addEventListener("submit", async event => {
+    event.preventDefault();
+
+    const caseId = document.getElementById("documentCaseId").value;
+    const uploadedBy =
+        document.getElementById("documentUploader").value.trim();
+    const category =
+        document.getElementById("documentCategory").value.trim();
+
+    try {
+        const response = await fetch(DOCUMENT_API, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                caseId: Number(caseId),
+                uploadedBy,
+                category
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || "Unable to register document");
+        }
+
+        documentForm.reset();
+        documentMessage.textContent =
+            "Document record registered successfully.";
+
+        await loadDocuments();
+    } catch (error) {
+        documentMessage.textContent =
+            "Registration failed: " + error.message;
+    }
+});
+
+refreshDocumentsButton?.addEventListener("click", loadDocuments);
+
+populateDocumentCases();
+loadDocuments();
