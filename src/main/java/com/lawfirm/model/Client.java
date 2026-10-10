@@ -12,7 +12,7 @@ public class Client {
         this.email = email;
     }
 
-    public int getClient()
+    public int getClientId()
     {
         return clientId;
     }
