@@ -13,6 +13,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import com.lawfirm.controller.NotificationHandler;
 
 public class Server {
 
@@ -27,6 +28,7 @@ public class Server {
         server.createContext("/api/cases", new CaseHandler());
         server.createContext("/api/appointments", new AppointmentHandler());
         server.createContext("/api/documents", new DocumentHandler());
+        server.createContext("/api/notifications", new NotificationHandler());
 
 
         Path frontendRoot = Path.of(
@@ -45,6 +47,8 @@ public class Server {
         System.out.println("Lawyer API: http://localhost:8082/api/lawyers");
         System.out.println("Case API: http://localhost:8082/api/cases");
         System.out.println("Appointment API: http://localhost:8082/api/appointments");
+        System.out.println("Appointment API: http://localhost:8082/api/documents");
+        System.out.println("Appointment API: http://localhost:8082/api/notifications");
 
     }
 

@@ -590,3 +590,139 @@ refreshDocumentsButton?.addEventListener("click", loadDocuments);
 
 populateDocumentCases();
 loadDocuments();
+
+
+const NOTIFICATION_API = "/api/notifications";
+
+const notificationTable = document.getElementById("notificationTable");
+const notificationMessage = document.getElementById("notificationMessage");
+const notificationForm = document.getElementById("notificationForm");
+
+async function loadNotifications() {
+    if (!notificationTable) return;
+
+    try {
+        const response = await fetch(NOTIFICATION_API);
+        const notifications = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                notifications.error || "Unable to load notifications"
+            );
+        }
+
+        notificationTable.replaceChildren();
+
+        if (!notifications.length) {
+            notificationTable.innerHTML =
+                '<tr><td colspan="7">No notifications found.</td></tr>';
+        }
+
+        notifications.forEach(notification => {
+            const row = document.createElement("tr");
+
+            addCell(row, notification.notificationId);
+            addCell(row, notification.recipientId);
+            addCell(row, notification.recipientType);
+            addCell(row, notification.message);
+            addCell(row, notification.sentOn);
+
+            const isRead = Number(notification.isRead) === 1;
+            addCell(row, isRead ? "Read" : "Unread");
+
+            const actionCell = addCell(row, "");
+
+            if (!isRead) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.textContent = "Mark as read";
+
+                button.addEventListener("click", async () => {
+                    try {
+                        const result = await fetch(NOTIFICATION_API, {
+                            method: "PUT",
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                notificationId: notification.notificationId
+                            })
+                        });
+
+                        const data = await result.json();
+
+                        if (!result.ok) {
+                            throw new Error(
+                                data.error || "Unable to update notification"
+                            );
+                        }
+
+                        notificationMessage.textContent =
+                            "Notification marked as read.";
+                        await loadNotifications();
+                    } catch (error) {
+                        notificationMessage.textContent = error.message;
+                    }
+                });
+
+                actionCell.appendChild(button);
+            } else {
+                actionCell.textContent = "—";
+            }
+
+            notificationTable.appendChild(row);
+        });
+
+        notificationMessage.textContent =
+            "Notification records loaded successfully.";
+    } catch (error) {
+        notificationTable.innerHTML =
+            '<tr><td colspan="7">Unable to load notifications.</td></tr>';
+        notificationMessage.textContent =
+            "Notification error: " + error.message;
+        console.error(error);
+    }
+}
+
+notificationForm?.addEventListener("submit", async event => {
+    event.preventDefault();
+
+    const recipientId =
+        document.getElementById("notificationRecipientId").value;
+    const recipientType =
+        document.getElementById("notificationRecipientType").value;
+    const message =
+        document.getElementById("notificationText").value.trim();
+
+    try {
+        const response = await fetch(NOTIFICATION_API, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                recipientId: Number(recipientId),
+                recipientType,
+                message
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || "Unable to create notification");
+        }
+
+        notificationForm.reset();
+        notificationMessage.textContent =
+            "Notification created successfully.";
+
+        await loadNotifications();
+    } catch (error) {
+        notificationMessage.textContent =
+            "Creation failed: " + error.message;
+    }
+});
+
+document.getElementById("refreshNotificationsButton")
+    ?.addEventListener("click", loadNotifications);
+
+loadNotifications();

@@ -228,6 +228,7 @@
         </div>
 
         <!-- DOCUMENT MANAGEMENT -->
+        <a class="nav-item" href="#notifications">Notifications</a>
         <section class="panel" id="documents">
             <div class="panel-heading">
                 <div>
@@ -288,6 +289,73 @@
                 </table>
             </div>
         </section>
+    </section>
+
+    <!-- NOTIFICATION MANAGEMENT -->
+    <section class="panel" id="notifications">
+        <div class="panel-heading">
+            <div>
+                <p class="eyebrow">COMMUNICATIONS</p>
+                <h2>Notifications</h2>
+                <p class="muted">
+                    View notifications and manage read status.
+                </p>
+            </div>
+            <button id="refreshNotificationsButton" type="button">
+                Refresh notifications ↻
+            </button>
+        </div>
+
+        <div id="notificationMessage" class="message">
+            Loading notifications...
+        </div>
+
+        <form id="notificationForm" class="client-form">
+            <input
+                    id="notificationRecipientId"
+                    type="number"
+                    min="1"
+                    placeholder="Recipient ID"
+                    required
+            >
+
+            <select id="notificationRecipientType" required>
+                <option value="">Recipient type</option>
+                <option value="Client">Client</option>
+                <option value="Lawyer">Lawyer</option>
+                <option value="Admin">Admin</option>
+            </select>
+
+            <input
+                    id="notificationText"
+                    type="text"
+                    placeholder="Notification message"
+                    required
+            >
+
+            <button type="submit">Create Notification +</button>
+        </form>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>RECIPIENT ID</th>
+                    <th>TYPE</th>
+                    <th>MESSAGE</th>
+                    <th>SENT ON</th>
+                    <th>READ</th>
+                    <th>ACTION</th>
+                </tr>
+                </thead>
+                <tbody id="notificationTable">
+                <tr>
+                    <td colspan="7">Loading notifications...</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
     </section>
 
     <footer>LEXORA · Integrated Law Firm Management Platform</footer>
