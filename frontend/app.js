@@ -1,5 +1,7 @@
 
 const API_URL = "/api/clients";
+const LAWYER_API = "/api/lawyers";
+const CASE_API = "/api/cases";
 
 const clientTable = document.getElementById("clientTable");
 const clientCount = document.getElementById("clientCount");
@@ -7,8 +9,20 @@ const message = document.getElementById("message");
 const refreshButton = document.getElementById("refreshButton");
 const clientForm = document.getElementById("clientForm");
 
+const lawyerTable = document.getElementById("lawyerTable");
+const lawyerCount = document.getElementById("lawyerCount");
+const caseTable = document.getElementById("caseTable");
+const caseCount = document.getElementById("caseCount");
+
+// Safely create a table cell
+function addCell(row, value) {
+    const cell = document.createElement("td");
+    cell.textContent = value ?? "—";
+    row.appendChild(cell);
+}
+
+// Load clients
 async function loadClients() {
-    message.textContent = "Loading clients...";
     refreshButton.disabled = true;
 
     try {
@@ -16,7 +30,6 @@ async function loadClients() {
         if (!response.ok) throw new Error("Unable to load clients");
 
         const clients = await response.json();
-
         clientTable.replaceChildren();
         clientCount.textContent = clients.length;
 
@@ -28,18 +41,12 @@ async function loadClients() {
         for (const client of clients) {
             const row = document.createElement("tr");
 
-            const idCell = document.createElement("td");
-            idCell.textContent = client.clientId;
+            addCell(row, client.clientId);
+            addCell(row, client.fullName);
+            addCell(row, client.email);
 
-            const nameCell = document.createElement("td");
-            nameCell.textContent = client.fullName ?? "";
+            const actions = document.createElement("td");
 
-            const emailCell = document.createElement("td");
-            emailCell.textContent = client.email ?? "";
-
-            const actionCell = document.createElement("td");
-
-            // Edit button
             const editButton = document.createElement("button");
             editButton.textContent = "Edit";
             editButton.className = "edit-button";
@@ -49,30 +56,25 @@ async function loadClients() {
                     "Enter client name:",
                     client.fullName
                 );
-
                 if (fullName === null) return;
 
                 const email = prompt(
                     "Enter client email:",
                     client.email
                 );
-
                 if (email === null) return;
 
                 if (!fullName.trim() || !email.trim()) {
-                    message.textContent =
-                        "Name and email cannot be empty.";
+                    message.textContent = "Name and email are required.";
                     return;
                 }
 
                 try {
-                    const updateResponse = await fetch(
+                    const result = await fetch(
                         `${API_URL}?id=${client.clientId}`,
                         {
                             method: "PUT",
-                            headers: {
-                                "Content-Type": "application/json"
-                            },
+                            headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
                                 fullName: fullName.trim(),
                                 email: email.trim()
@@ -80,25 +82,18 @@ async function loadClients() {
                         }
                     );
 
-                    const result = await updateResponse.json();
-
-                    if (!updateResponse.ok) {
-                        throw new Error(
-                            result.error || "Unable to update client"
-                        );
+                    const data = await result.json();
+                    if (!result.ok) {
+                        throw new Error(data.error || "Update failed");
                     }
 
-                    message.textContent =
-                        "Client updated successfully.";
-
+                    message.textContent = "Client updated successfully.";
                     await loadClients();
-
                 } catch (error) {
                     message.textContent = error.message;
                 }
             });
 
-            // Delete button
             const deleteButton = document.createElement("button");
             deleteButton.textContent = "Delete";
             deleteButton.className = "delete-button";
@@ -107,47 +102,38 @@ async function loadClients() {
                 if (!confirm(`Delete ${client.fullName}?`)) return;
 
                 try {
-                    const deleteResponse = await fetch(
+                    const result = await fetch(
                         `${API_URL}?id=${client.clientId}`,
                         { method: "DELETE" }
                     );
 
-                    const result = await deleteResponse.json();
-
-                    if (!deleteResponse.ok) {
-                        throw new Error(
-                            result.error || "Unable to delete client"
-                        );
+                    const data = await result.json();
+                    if (!result.ok) {
+                        throw new Error(data.error || "Delete failed");
                     }
 
-                    message.textContent =
-                        "Client deleted successfully.";
-
+                    message.textContent = "Client deleted successfully.";
                     await loadClients();
-
                 } catch (error) {
                     message.textContent = error.message;
                 }
             });
 
-            actionCell.append(editButton, deleteButton);
-            row.append(idCell, nameCell, emailCell, actionCell);
+            actions.append(editButton, deleteButton);
+            row.appendChild(actions);
             clientTable.appendChild(row);
         }
 
         message.textContent = "Client records loaded successfully.";
-
     } catch (error) {
-        message.textContent =
-            "Could not load clients. Check the Java server and database.";
+        message.textContent = "Unable to load clients: " + error.message;
         console.error(error);
-
     } finally {
         refreshButton.disabled = false;
     }
 }
 
-// Add client
+// Add a client
 clientForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
@@ -161,24 +147,108 @@ clientForm.addEventListener("submit", async (event) => {
             body: JSON.stringify({ fullName, email })
         });
 
-        const result = await response.json();
-
+        const data = await response.json();
         if (!response.ok) {
-            throw new Error(result.error || "Unable to add client");
+            throw new Error(data.error || "Unable to add client");
         }
 
         clientForm.reset();
         message.textContent = "Client added successfully.";
-
         await loadClients();
-
     } catch (error) {
         message.textContent = error.message;
     }
 });
 
-// Refresh button
-refreshButton.addEventListener("click", loadClients);
+// Load lawyers
+async function loadLawyers() {
+    try {
+        const response = await fetch(LAWYER_API);
+        if (!response.ok) throw new Error("Unable to load lawyers");
 
-// Initial load
-loadClients();
+        const lawyers = await response.json();
+        lawyerTable.replaceChildren();
+        lawyerCount.textContent = `${lawyers.length} lawyers`;
+
+        if (lawyers.length === 0) {
+            lawyerTable.innerHTML =
+                '<tr><td colspan="5">No lawyers found.</td></tr>';
+            return;
+        }
+
+        for (const lawyer of lawyers) {
+            const row = document.createElement("tr");
+            addCell(row, lawyer.lawyerId);
+            addCell(row, lawyer.fullName);
+            addCell(row, lawyer.specialization);
+
+            addCell(
+                row,
+                lawyer.experienceYears == null
+                    ? "—"
+                    : `${lawyer.experienceYears} years`
+            );
+
+            addCell(
+                row,
+                lawyer.consultationFee == null
+                    ? "—"
+                    : `₹${lawyer.consultationFee}`
+            );
+
+            lawyerTable.appendChild(row);
+        }
+    } catch (error) {
+        lawyerCount.textContent = "Unavailable";
+        lawyerTable.innerHTML =
+            '<tr><td colspan="5">Unable to load lawyers.</td></tr>';
+        console.error(error);
+    }
+}
+
+// Load legal cases
+async function loadCases() {
+    try {
+        const response = await fetch(CASE_API);
+        if (!response.ok) throw new Error("Unable to load cases");
+
+        const cases = await response.json();
+        caseTable.replaceChildren();
+        caseCount.textContent = `${cases.length} cases`;
+
+        if (cases.length === 0) {
+            caseTable.innerHTML =
+                '<tr><td colspan="5">No legal cases found.</td></tr>';
+            return;
+        }
+
+        for (const legalCase of cases) {
+            const row = document.createElement("tr");
+            addCell(row, legalCase.caseId);
+            addCell(row, legalCase.clientId);
+            addCell(row, legalCase.category);
+            addCell(row, legalCase.status);
+            addCell(row, legalCase.complexity);
+            caseTable.appendChild(row);
+        }
+    } catch (error) {
+        caseCount.textContent = "Unavailable";
+        caseTable.innerHTML =
+            '<tr><td colspan="5">Unable to load legal cases.</td></tr>';
+        console.error(error);
+    }
+}
+
+// Refresh all dashboard data
+async function refreshDashboard() {
+    await Promise.all([
+        loadClients(),
+        loadLawyers(),
+        loadCases()
+    ]);
+}
+
+refreshButton.addEventListener("click", refreshDashboard);
+
+// Initial dashboard load
+refreshDashboard();

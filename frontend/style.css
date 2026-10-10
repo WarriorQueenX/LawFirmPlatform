@@ -310,3 +310,47 @@ footer {
 .delete-button:hover {
     opacity: 0.75;
 }
+
+/* Dashboard table improvements */
+.panel {
+    margin-bottom: 28px;
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.table-container {
+    width: 100%;
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 13px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+th {
+    white-space: nowrap;
+}
+
+tbody tr:hover {
+    background: rgba(255, 255, 255, 0.035);
+}
+
+.edit-button, .delete-button {
+    margin: 3px;
+    padding: 7px 11px;
+    border-radius: 5px;
+    cursor: pointer;
+}

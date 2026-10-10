@@ -1,5 +1,7 @@
 
 package com.lawfirm;
+import com.lawfirm.controller.LawyerHandler;
+import com.lawfirm.controller.CaseHandler;
 
 import com.lawfirm.controller.ClientHandler;
 import com.sun.net.httpserver.HttpServer;
@@ -21,6 +23,8 @@ public class Server {
         );
 
         server.createContext("/api/clients", new ClientHandler());
+        server.createContext("/api/lawyers", new LawyerHandler());
+        server.createContext("/api/cases", new CaseHandler());
 
         server.createContext("/", new HttpHandler() {
             @Override
