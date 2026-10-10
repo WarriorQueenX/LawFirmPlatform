@@ -164,43 +164,120 @@ clientForm.addEventListener("submit", async event => {
 });
 
 // LAWYERS
+
 async function loadLawyers() {
+    const table = document.getElementById("lawyerTable");
+    const count = document.getElementById("lawyerCount");
+
+    if (!table) return;
+
+    table.innerHTML =
+        '<tr><td colspan="5">Loading lawyers...</td></tr>';
+
     try {
         const lawyers = await requestJSON(LAWYER_API);
-        lawyersCache = Array.isArray(lawyers) ? lawyers : [];
 
-        lawyerTable.replaceChildren();
-        lawyerCount.textContent = `${lawyersCache.length} lawyers`;
+        lawyersCache = lawyers;
+        renderLawyers(lawyers);
 
-        if ($("lawyerCountStat")) {
-            $("lawyerCountStat").textContent = lawyersCache.length;
-        }
-
-        if (!lawyersCache.length) {
-            lawyerTable.innerHTML =
-                '<tr><td colspan="5">No lawyers found.</td></tr>';
-        }
-
-        lawyersCache.forEach(lawyer => {
-            const row = document.createElement("tr");
-            addCell(row, lawyer.lawyerId);
-            addCell(row, lawyer.fullName);
-            addCell(row, lawyer.specialization);
-            addCell(row, lawyer.experienceYears == null
-                ? "—" : `${lawyer.experienceYears} years`);
-            addCell(row, lawyer.consultationFee == null
-                ? "—" : `₹${lawyer.consultationFee}`);
-            lawyerTable.appendChild(row);
-        });
-
-        populateAppointmentDropdowns();
     } catch (error) {
-        lawyerCount.textContent = "Unavailable";
-        lawyerTable.innerHTML =
+        table.innerHTML =
             '<tr><td colspan="5">Unable to load lawyers.</td></tr>';
-        console.error("Lawyer loading failed:", error);
+
+        if (count) count.textContent = "0 lawyers";
+        console.error("Lawyer loading error:", error);
     }
 }
+
+function renderLawyers(lawyers) {
+    const table = document.getElementById("lawyerTable");
+    const count = document.getElementById("lawyerCount");
+
+    if (!table) return;
+
+    table.innerHTML = "";
+
+    if (count) {
+        count.textContent = `${lawyers.length} lawyers`;
+    }
+
+    if (lawyers.length === 0) {
+        table.innerHTML =
+            '<tr><td colspan="5">No matching lawyers found.</td></tr>';
+        return;
+    }
+
+    lawyers.forEach(lawyer => {
+        const row = document.createElement("tr");
+
+        [
+            lawyer.lawyerId,
+            lawyer.fullName,
+            lawyer.specialization,
+            lawyer.experienceYears,
+            lawyer.consultationFee
+        ].forEach(value => addCell(row, value ?? "—"));
+
+        table.appendChild(row);
+    });
+}
+
+function filterLawyers() {
+    const search = (
+        document.getElementById("lawyerSearch")?.value || ""
+    ).trim().toLowerCase();
+
+    const specialization = (
+        document.getElementById("specializationFilter")?.value || ""
+    ).trim().toLowerCase();
+
+    const experienceInput =
+        document.getElementById("experienceFilter")?.value;
+
+    const feeInput =
+        document.getElementById("maxFeeFilter")?.value;
+
+    const minExperience =
+        experienceInput === "" || experienceInput == null
+            ? null
+            : Number(experienceInput);
+
+    const maxFee =
+        feeInput === "" || feeInput == null
+            ? null
+            : Number(feeInput);
+
+    const filtered = lawyersCache.filter(lawyer => {
+        const name = String(lawyer.fullName || "").toLowerCase();
+        const area = String(lawyer.specialization || "").toLowerCase();
+        const years = Number(lawyer.experienceYears);
+        const fee = Number(lawyer.consultationFee);
+
+        return (
+            name.includes(search) &&
+            area.includes(specialization) &&
+            (minExperience === null ||
+                (!Number.isNaN(years) && years >= minExperience)) &&
+            (maxFee === null ||
+                (!Number.isNaN(fee) && fee <= maxFee))
+        );
+    });
+
+    renderLawyers(filtered);
+}
+
+document.getElementById("lawyerFilterForm")
+    ?.addEventListener("submit", event => {
+        event.preventDefault();
+        filterLawyers();
+    });
+
+document.getElementById("clearLawyerFilters")
+    ?.addEventListener("click", () => {
+        document.getElementById("lawyerFilterForm").reset();
+        renderLawyers(lawyersCache);
+    });
+
 
 // LEGAL CASES
 async function loadCases() {
@@ -726,3 +803,145 @@ document.getElementById("refreshNotificationsButton")
     ?.addEventListener("click", loadNotifications);
 
 loadNotifications();
+
+const BRANCH_API = "/api/branches";
+
+async function loadBranches() {
+    const table = document.getElementById("branchTable");
+    const message = document.getElementById("branchMessage");
+
+    if (!table) return;
+
+    table.innerHTML =
+        '<tr><td colspan="6">Loading branch workload...</td></tr>';
+
+    try {
+        const branches = await requestJSON(BRANCH_API);
+
+        table.innerHTML = "";
+
+        if (!branches.length) {
+            table.innerHTML =
+                '<tr><td colspan="6">No branch records found.</td></tr>';
+            if (message) message.textContent = "";
+            return;
+        }
+
+        branches.forEach(branch => {
+            const row = document.createElement("tr");
+
+            [
+                branch.branchId,
+                branch.branchName,
+                branch.location,
+                branch.maxCapacity,
+                branch.lawyerCount,
+                branch.activeCases
+            ].forEach(value => addCell(row, value ?? "—"));
+
+            table.appendChild(row);
+        });
+
+        if (message) {
+            message.textContent =
+                `Loaded workload for ${branches.length} branches.`;
+        }
+    } catch (error) {
+        table.innerHTML =
+            '<tr><td colspan="6">Unable to load branch workload.</td></tr>';
+
+        if (message) {
+            message.textContent = error.message;
+        }
+
+        console.error("Branch workload error:", error);
+    }
+}
+
+document
+    .getElementById("refreshBranchesButton")
+    ?.addEventListener("click", loadBranches);
+
+loadBranches();
+
+const addLawyerForm = document.getElementById("addLawyerForm");
+
+addLawyerForm?.addEventListener("submit", async function (event) {
+    event.preventDefault();
+
+    const message = document.getElementById("addLawyerMessage");
+    const submitButton = addLawyerForm.querySelector(
+        'button[type="submit"]'
+    );
+
+    const lawyer = {
+        fullName: document.getElementById("newLawyerName").value.trim(),
+        specialization: document.getElementById(
+            "newLawyerSpecialization"
+        ).value.trim(),
+        experienceYears: Number(
+            document.getElementById("newLawyerExperience").value
+        ),
+        consultationFee: Number(
+            document.getElementById("newLawyerFee").value
+        ),
+        branchId: Number(
+            document.getElementById("newLawyerBranch").value
+        ),
+        roleDesignation: document.getElementById("newLawyerRole").value,
+        languages: document.getElementById("newLawyerLanguages").value.trim()
+    };
+
+    if (
+        !lawyer.fullName ||
+        !lawyer.specialization ||
+        !lawyer.roleDesignation ||
+        !Number.isInteger(lawyer.experienceYears) ||
+        lawyer.experienceYears < 0 ||
+        !Number.isInteger(lawyer.branchId) ||
+        lawyer.branchId < 1 ||
+        !Number.isFinite(lawyer.consultationFee) ||
+        lawyer.consultationFee < 0
+    ) {
+        message.textContent = "Please enter valid lawyer details.";
+        return;
+    }
+
+    submitButton.disabled = true;
+    message.textContent = "Adding lawyer...";
+
+    try {
+        const response = await fetch(LAWYER_API, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(lawyer)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                result.error || "Unable to add lawyer."
+            );
+        }
+
+        message.textContent = "Lawyer added successfully.";
+        addLawyerForm.reset();
+
+        await loadLawyers();
+
+        // Refresh appointment dropdowns if the existing helper is available.
+        if (typeof populateAppointmentDropdowns === "function") {
+            populateAppointmentDropdowns();
+        }
+
+    } catch (error) {
+        message.textContent = error.message;
+        console.error("Add lawyer error:", error);
+    } finally {
+        submitButton.disabled = false;
+    }
+});
+

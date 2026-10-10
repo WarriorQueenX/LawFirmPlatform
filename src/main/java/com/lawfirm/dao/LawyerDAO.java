@@ -2,6 +2,7 @@
 package com.lawfirm.dao;
 
 import com.lawfirm.util.DBConnection;
+
 import java.sql.*;
 import java.util.*;
 
@@ -40,5 +41,43 @@ public class LawyerDAO {
         }
 
         return lawyers;
+    }
+
+    public static int addLawyer(
+            String fullName,
+            String specialization,
+            int experienceYears,
+            int branchId,
+            double consultationFee,
+            String languages,
+            String roleDesignation
+    ) throws SQLException {
+
+        String sql = """
+            INSERT INTO LAWYER (
+                FULL_NAME,
+                SPECIALIZATION,
+                EXPERIENCE_YEARS,
+                BRANCH_ID,
+                CONSULTATION_FEE,
+                LANGUAGES,
+                ROLE_DESIGNATION
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """;
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, fullName);
+            stmt.setString(2, specialization);
+            stmt.setInt(3, experienceYears);
+            stmt.setInt(4, branchId);
+            stmt.setDouble(5, consultationFee);
+            stmt.setString(6, languages);
+            stmt.setString(7, roleDesignation);
+
+            return stmt.executeUpdate();
+        }
     }
 }
