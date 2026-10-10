@@ -2,66 +2,89 @@
 const API_URL = "/api/clients";
 const LAWYER_API = "/api/lawyers";
 const CASE_API = "/api/cases";
+const APPOINTMENT_API = "/api/appointments";
 
-const clientTable = document.getElementById("clientTable");
-const clientCount = document.getElementById("clientCount");
-const message = document.getElementById("message");
-const refreshButton = document.getElementById("refreshButton");
-const clientForm = document.getElementById("clientForm");
+const $ = id => document.getElementById(id);
 
-const lawyerTable = document.getElementById("lawyerTable");
-const lawyerCount = document.getElementById("lawyerCount");
-const caseTable = document.getElementById("caseTable");
-const caseCount = document.getElementById("caseCount");
+const clientTable = $("clientTable");
+const clientCount = $("clientCount");
+const message = $("message");
+const refreshButton = $("refreshButton");
+const clientForm = $("clientForm");
 
-// Safely create a table cell
+const lawyerTable = $("lawyerTable");
+const lawyerCount = $("lawyerCount");
+const caseTable = $("caseTable");
+const caseCount = $("caseCount");
+
+const appointmentTable = $("appointmentTable");
+const appointmentMessage = $("appointmentMessage");
+const appointmentForm = $("appointmentForm");
+const refreshAppointmentsButton = $("refreshAppointmentsButton");
+
+let clientsCache = [];
+let lawyersCache = [];
+
 function addCell(row, value) {
     const cell = document.createElement("td");
-    cell.textContent = value ?? "—";
+    cell.textContent = value == null || value === "" ? "—" : value;
     row.appendChild(cell);
+    return cell;
 }
 
-// Load clients
+async function requestJSON(url, options = {}) {
+    const response = await fetch(url, options);
+    const text = await response.text();
+
+    let data;
+    try {
+        data = text ? JSON.parse(text) : null;
+    } catch {
+        throw new Error("The server returned an invalid response.");
+    }
+
+    if (!response.ok) {
+        throw new Error(data?.error || `Request failed (${response.status})`);
+    }
+    return data;
+}
+
+// CLIENT CRUD: preserved
 async function loadClients() {
     refreshButton.disabled = true;
 
     try {
-        const response = await fetch(API_URL);
-        if (!response.ok) throw new Error("Unable to load clients");
+        const clients = await requestJSON(API_URL);
+        clientsCache = Array.isArray(clients) ? clients : [];
 
-        const clients = await response.json();
         clientTable.replaceChildren();
-        clientCount.textContent = clients.length;
+        clientCount.textContent = clientsCache.length;
 
-        if (clients.length === 0) {
+        if ($("appointmentCount")) {
+            // Updated when appointments load.
+        }
+
+        if (!clientsCache.length) {
             clientTable.innerHTML =
                 '<tr><td colspan="4">No clients found.</td></tr>';
         }
 
-        for (const client of clients) {
+        clientsCache.forEach(client => {
             const row = document.createElement("tr");
-
             addCell(row, client.clientId);
             addCell(row, client.fullName);
             addCell(row, client.email);
 
-            const actions = document.createElement("td");
+            const actions = addCell(row, "");
+            const edit = document.createElement("button");
+            edit.textContent = "Edit";
+            edit.className = "edit-button";
 
-            const editButton = document.createElement("button");
-            editButton.textContent = "Edit";
-            editButton.className = "edit-button";
-
-            editButton.addEventListener("click", async () => {
-                const fullName = prompt(
-                    "Enter client name:",
-                    client.fullName
-                );
+            edit.addEventListener("click", async () => {
+                const fullName = prompt("Enter client name:", client.fullName);
                 if (fullName === null) return;
 
-                const email = prompt(
-                    "Enter client email:",
-                    client.email
-                );
+                const email = prompt("Enter client email:", client.email);
                 if (email === null) return;
 
                 if (!fullName.trim() || !email.trim()) {
@@ -70,87 +93,67 @@ async function loadClients() {
                 }
 
                 try {
-                    const result = await fetch(
-                        `${API_URL}?id=${client.clientId}`,
-                        {
-                            method: "PUT",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                                fullName: fullName.trim(),
-                                email: email.trim()
-                            })
-                        }
-                    );
-
-                    const data = await result.json();
-                    if (!result.ok) {
-                        throw new Error(data.error || "Update failed");
-                    }
-
+                    await requestJSON(`${API_URL}?id=${client.clientId}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            fullName: fullName.trim(),
+                            email: email.trim()
+                        })
+                    });
                     message.textContent = "Client updated successfully.";
                     await loadClients();
+                    await loadAppointments();
                 } catch (error) {
                     message.textContent = error.message;
                 }
             });
 
-            const deleteButton = document.createElement("button");
-            deleteButton.textContent = "Delete";
-            deleteButton.className = "delete-button";
+            const remove = document.createElement("button");
+            remove.textContent = "Delete";
+            remove.className = "delete-button";
 
-            deleteButton.addEventListener("click", async () => {
+            remove.addEventListener("click", async () => {
                 if (!confirm(`Delete ${client.fullName}?`)) return;
 
                 try {
-                    const result = await fetch(
-                        `${API_URL}?id=${client.clientId}`,
-                        { method: "DELETE" }
-                    );
-
-                    const data = await result.json();
-                    if (!result.ok) {
-                        throw new Error(data.error || "Delete failed");
-                    }
-
+                    await requestJSON(`${API_URL}?id=${client.clientId}`, {
+                        method: "DELETE"
+                    });
                     message.textContent = "Client deleted successfully.";
                     await loadClients();
+                    await loadAppointments();
                 } catch (error) {
                     message.textContent = error.message;
                 }
             });
 
-            actions.append(editButton, deleteButton);
-            row.appendChild(actions);
+            actions.append(edit, remove);
             clientTable.appendChild(row);
-        }
+        });
 
         message.textContent = "Client records loaded successfully.";
+        populateAppointmentDropdowns();
     } catch (error) {
         message.textContent = "Unable to load clients: " + error.message;
-        console.error(error);
+        console.error("Client loading failed:", error);
     } finally {
         refreshButton.disabled = false;
     }
 }
 
-// Add a client
-clientForm.addEventListener("submit", async (event) => {
+clientForm.addEventListener("submit", async event => {
     event.preventDefault();
 
-    const fullName = document.getElementById("fullName").value.trim();
-    const email = document.getElementById("email").value.trim();
+    const fullName = $("fullName").value.trim();
+    const email = $("email").value.trim();
 
     try {
-        const response = await fetch(API_URL, {
+        await requestJSON(API_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ fullName, email })
         });
-
-        const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || "Unable to add client");
-        }
 
         clientForm.reset();
         message.textContent = "Client added successfully.";
@@ -160,95 +163,275 @@ clientForm.addEventListener("submit", async (event) => {
     }
 });
 
-// Load lawyers
+// LAWYERS
 async function loadLawyers() {
     try {
-        const response = await fetch(LAWYER_API);
-        if (!response.ok) throw new Error("Unable to load lawyers");
+        const lawyers = await requestJSON(LAWYER_API);
+        lawyersCache = Array.isArray(lawyers) ? lawyers : [];
 
-        const lawyers = await response.json();
         lawyerTable.replaceChildren();
-        lawyerCount.textContent = `${lawyers.length} lawyers`;
+        lawyerCount.textContent = `${lawyersCache.length} lawyers`;
 
-        if (lawyers.length === 0) {
-            lawyerTable.innerHTML =
-                '<tr><td colspan="5">No lawyers found.</td></tr>';
-            return;
+        if ($("lawyerCountStat")) {
+            $("lawyerCountStat").textContent = lawyersCache.length;
         }
 
-        for (const lawyer of lawyers) {
+        if (!lawyersCache.length) {
+            lawyerTable.innerHTML =
+                '<tr><td colspan="5">No lawyers found.</td></tr>';
+        }
+
+        lawyersCache.forEach(lawyer => {
             const row = document.createElement("tr");
             addCell(row, lawyer.lawyerId);
             addCell(row, lawyer.fullName);
             addCell(row, lawyer.specialization);
-
-            addCell(
-                row,
-                lawyer.experienceYears == null
-                    ? "—"
-                    : `${lawyer.experienceYears} years`
-            );
-
-            addCell(
-                row,
-                lawyer.consultationFee == null
-                    ? "—"
-                    : `₹${lawyer.consultationFee}`
-            );
-
+            addCell(row, lawyer.experienceYears == null
+                ? "—" : `${lawyer.experienceYears} years`);
+            addCell(row, lawyer.consultationFee == null
+                ? "—" : `₹${lawyer.consultationFee}`);
             lawyerTable.appendChild(row);
-        }
+        });
+
+        populateAppointmentDropdowns();
     } catch (error) {
         lawyerCount.textContent = "Unavailable";
         lawyerTable.innerHTML =
             '<tr><td colspan="5">Unable to load lawyers.</td></tr>';
-        console.error(error);
+        console.error("Lawyer loading failed:", error);
     }
 }
 
-// Load legal cases
+// LEGAL CASES
 async function loadCases() {
     try {
-        const response = await fetch(CASE_API);
-        if (!response.ok) throw new Error("Unable to load cases");
-
-        const cases = await response.json();
+        const cases = await requestJSON(CASE_API);
         caseTable.replaceChildren();
         caseCount.textContent = `${cases.length} cases`;
 
-        if (cases.length === 0) {
-            caseTable.innerHTML =
-                '<tr><td colspan="5">No legal cases found.</td></tr>';
-            return;
+        if ($("activeCaseCount")) {
+            $("activeCaseCount").textContent = cases.filter(
+                item => !["Completed", "Closed"].includes(item.status)
+            ).length;
         }
 
-        for (const legalCase of cases) {
-            const row = document.createElement("tr");
-            addCell(row, legalCase.caseId);
-            addCell(row, legalCase.clientId);
-            addCell(row, legalCase.category);
-            addCell(row, legalCase.status);
-            addCell(row, legalCase.complexity);
-            caseTable.appendChild(row);
+        if (!cases.length) {
+            caseTable.innerHTML =
+                '<tr><td colspan="5">No legal cases found.</td></tr>';
         }
+
+        cases.forEach(item => {
+            const row = document.createElement("tr");
+            addCell(row, item.caseId);
+            addCell(row, item.clientId);
+            addCell(row, item.category);
+            addCell(row, item.status);
+            addCell(row, item.complexity);
+            caseTable.appendChild(row);
+        });
     } catch (error) {
         caseCount.textContent = "Unavailable";
         caseTable.innerHTML =
             '<tr><td colspan="5">Unable to load legal cases.</td></tr>';
-        console.error(error);
+        console.error("Case loading failed:", error);
     }
 }
 
-// Refresh all dashboard data
+// APPOINTMENT DROPDOWNS: show names, submit IDs
+function populateAppointmentDropdowns() {
+    const clientSelect = $("appointmentClientId");
+    const lawyerSelect = $("appointmentLawyerId");
+    if (!clientSelect || !lawyerSelect) return;
+
+    const selectedClient = clientSelect.value;
+    const selectedLawyer = lawyerSelect.value;
+
+    clientSelect.replaceChildren(new Option("Client Name", ""));
+    clientsCache.forEach(client => {
+        clientSelect.add(new Option(
+            `${client.fullName} (ID: ${client.clientId})`,
+            client.clientId
+        ));
+    });
+
+    lawyerSelect.replaceChildren(new Option("Lawyer Name", ""));
+    lawyersCache.forEach(lawyer => {
+        lawyerSelect.add(new Option(
+            `${lawyer.fullName} (ID: ${lawyer.lawyerId})`,
+            lawyer.lawyerId
+        ));
+    });
+
+    if (selectedClient) clientSelect.value = selectedClient;
+    if (selectedLawyer) lawyerSelect.value = selectedLawyer;
+}
+
+// APPOINTMENTS
+async function loadAppointments() {
+    if (!appointmentTable) return;
+
+    if (appointmentMessage) {
+        appointmentMessage.textContent = "Loading appointments...";
+    }
+
+    try {
+        const appointments = await requestJSON(APPOINTMENT_API);
+        appointmentTable.replaceChildren();
+
+        if ($("appointmentCount")) {
+            $("appointmentCount").textContent = appointments.length;
+        }
+
+        if (!appointments.length) {
+            appointmentTable.innerHTML =
+                '<tr><td colspan="8">No appointments found.</td></tr>';
+        }
+
+        appointments.forEach(appointment => {
+            const row = document.createElement("tr");
+            addCell(row, appointment.appointmentId);
+
+            const client = clientsCache.find(
+                item => Number(item.clientId) === Number(appointment.clientId)
+            );
+            const lawyer = lawyersCache.find(
+                item => Number(item.lawyerId) === Number(appointment.lawyerId)
+            );
+
+            addCell(row, client?.fullName || `Client #${appointment.clientId}`);
+            addCell(row, lawyer?.fullName || `Lawyer #${appointment.lawyerId}`);
+
+            const date = appointment.appointmentDate;
+            const time = appointment.timeSlot;
+
+            addCell(row, formatDate(date));
+            addCell(row, formatTime(time));
+            addCell(row, appointment.mode);
+            addCell(row, appointment.status);
+
+            const actionCell = addCell(row, "");
+            const statusSelect = document.createElement("select");
+            statusSelect.className = "appointment-status-select";
+
+            ["Confirmed", "Completed", "Cancelled"].forEach(status => {
+                statusSelect.add(new Option(status, status));
+            });
+
+            statusSelect.value = appointment.status || "Confirmed";
+
+            const updateButton = document.createElement("button");
+            updateButton.type = "button";
+            updateButton.textContent = "Update";
+
+            updateButton.addEventListener("click", async () => {
+                try {
+                    await requestJSON(APPOINTMENT_API, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            appointmentId: appointment.appointmentId,
+                            status: statusSelect.value
+                        })
+                    });
+
+                    appointmentMessage.textContent =
+                        "Appointment status updated.";
+                    await loadAppointments();
+                } catch (error) {
+                    appointmentMessage.textContent = error.message;
+                }
+            });
+
+            actionCell.append(statusSelect, updateButton);
+            appointmentTable.appendChild(row);
+        });
+
+        if (appointmentMessage) {
+            appointmentMessage.textContent =
+                "Appointment records loaded successfully.";
+        }
+    } catch (error) {
+        appointmentTable.innerHTML =
+            '<tr><td colspan="8">Unable to load appointments. Check the server console.</td></tr>';
+
+        if (appointmentMessage) {
+            appointmentMessage.textContent =
+                "Unable to load appointments: " + error.message;
+        }
+        console.error("Appointment loading failed:", error);
+    }
+}
+
+function formatDate(value) {
+    if (!value) return "—";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+        ? String(value)
+        : date.toLocaleDateString();
+}
+
+function formatTime(value) {
+    if (!value) return "—";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+        ? String(value)
+        : date.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit"
+        });
+}
+
+appointmentForm?.addEventListener("submit", async event => {
+    event.preventDefault();
+
+    const clientId = $("appointmentClientId").value;
+    const lawyerId = $("appointmentLawyerId").value;
+    const appointmentDate = $("appointmentDateTime").value;
+    const mode = $("appointmentMode").value;
+
+    if (!clientId || !lawyerId || !appointmentDate || !mode) {
+        appointmentMessage.textContent =
+            "Please complete every appointment field.";
+        return;
+    }
+
+    try {
+        await requestJSON(APPOINTMENT_API, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                clientId: Number(clientId),
+                lawyerId: Number(lawyerId),
+                appointmentDate,
+                mode
+            })
+        });
+
+        appointmentForm.reset();
+        appointmentMessage.textContent = "Appointment booked successfully.";
+        await loadAppointments();
+    } catch (error) {
+        appointmentMessage.textContent =
+            "Booking failed: " + error.message;
+    }
+});
+
+refreshButton?.addEventListener("click", async () => {
+    await loadClients();
+    await loadLawyers();
+    await loadCases();
+    await loadAppointments();
+});
+
+refreshAppointmentsButton?.addEventListener("click", loadAppointments);
+
 async function refreshDashboard() {
     await Promise.all([
         loadClients(),
         loadLawyers(),
         loadCases()
     ]);
+    await loadAppointments();
 }
 
-refreshButton.addEventListener("click", refreshDashboard);
-
-// Initial dashboard load
 refreshDashboard();
