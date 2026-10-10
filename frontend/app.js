@@ -189,6 +189,7 @@ async function loadLawyers() {
     }
 }
 
+
 function renderLawyers(lawyers) {
     const table = document.getElementById("lawyerTable");
     const count = document.getElementById("lawyerCount");
@@ -203,7 +204,7 @@ function renderLawyers(lawyers) {
 
     if (lawyers.length === 0) {
         table.innerHTML =
-            '<tr><td colspan="5">No matching lawyers found.</td></tr>';
+            '<tr><td colspan="6">No matching lawyers found.</td></tr>';
         return;
     }
 
@@ -218,6 +219,20 @@ function renderLawyers(lawyers) {
             lawyer.consultationFee
         ].forEach(value => addCell(row, value ?? "—"));
 
+        const actions = document.createElement("td");
+
+        const editButton = document.createElement("button");
+        editButton.type = "button";
+        editButton.textContent = "Edit";
+        editButton.addEventListener("click", () => editLawyer(lawyer));
+
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.textContent = "Delete";
+        deleteButton.addEventListener("click", () => deleteLawyer(lawyer));
+
+        actions.append(editButton, document.createTextNode(" "), deleteButton);
+        row.appendChild(actions);
         table.appendChild(row);
     });
 }
@@ -944,4 +959,122 @@ addLawyerForm?.addEventListener("submit", async function (event) {
         submitButton.disabled = false;
     }
 });
+
+async function editLawyer(lawyer) {
+    const fullName = prompt("Full name:", lawyer.fullName);
+    if (fullName === null) return;
+
+    const specialization = prompt(
+        "Specialization:",
+        lawyer.specialization
+    );
+    if (specialization === null) return;
+
+    const experienceYears = prompt(
+        "Years of experience:",
+        lawyer.experienceYears
+    );
+    if (experienceYears === null) return;
+
+    const consultationFee = prompt(
+        "Consultation fee:",
+        lawyer.consultationFee
+    );
+    if (consultationFee === null) return;
+
+    const branchId = prompt("Branch ID:", lawyer.branchId);
+    if (branchId === null) return;
+
+    const languages = prompt("Languages:", lawyer.languages);
+    if (languages === null) return;
+
+    const roleDesignation = prompt(
+        "Role (Partner, Associate, Paralegal, Intern):",
+        lawyer.roleDesignation
+    );
+    if (roleDesignation === null) return;
+
+    const payload = {
+        lawyerId: Number(lawyer.lawyerId),
+        fullName: fullName.trim(),
+        specialization: specialization.trim(),
+        experienceYears: Number(experienceYears),
+        consultationFee: Number(consultationFee),
+        branchId: Number(branchId),
+        languages: languages.trim(),
+        roleDesignation: roleDesignation.trim()
+    };
+
+    if (
+        !payload.fullName ||
+        !payload.specialization ||
+        !payload.languages ||
+        !Number.isInteger(payload.experienceYears) ||
+        payload.experienceYears < 0 ||
+        !Number.isFinite(payload.consultationFee) ||
+        payload.consultationFee < 0 ||
+        !Number.isInteger(payload.branchId) ||
+        payload.branchId <= 0 ||
+        !["Partner", "Associate", "Paralegal", "Intern"]
+            .includes(payload.roleDesignation)
+    ) {
+        alert("Please enter valid lawyer details.");
+        return;
+    }
+
+    try {
+        const response = await fetch("/api/lawyers", {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || "Could not update lawyer.");
+        }
+
+        alert("Lawyer updated successfully.");
+        await loadLawyers();
+    } catch (error) {
+        alert("Update failed: " + error.message);
+    }
+}
+
+async function deleteLawyer(lawyer) {
+    const confirmed = confirm(
+        `Delete lawyer "${lawyer.fullName}" (ID: ${lawyer.lawyerId})?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+        const response = await fetch("/api/lawyers", {
+            method: "DELETE",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                lawyerId: Number(lawyer.lawyerId)
+            })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || "Could not delete lawyer.");
+        }
+
+        alert("Lawyer deleted successfully.");
+        await loadLawyers();
+    } catch (error) {
+        alert(
+            "Delete failed. The lawyer may be linked to existing cases or appointments.\n" +
+            error.message
+        );
+    }
+}
 
