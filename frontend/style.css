@@ -285,3 +285,28 @@ footer {
     border-radius: 6px;
     font: inherit;
 }
+
+.delete-button {
+    margin-left: 8px;
+    padding: 6px 10px;
+    border: 1px solid #b94a48;
+    border-radius: 5px;
+    background: transparent;
+    color: #b94a48;
+    cursor: pointer;
+}
+
+.edit-button {
+    margin-right: 8px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.edit-button:hover,
+.delete-button:hover {
+    opacity: 0.75;
+}

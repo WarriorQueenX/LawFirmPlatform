@@ -3,7 +3,6 @@ package com.lawfirm.controller;
 
 import com.lawfirm.dao.ClientDAO;
 import com.lawfirm.model.Client;
-
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
@@ -16,11 +15,12 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static com.lawfirm.dao.ClientDAO.updateClient;
+
 public class ClientHandler implements HttpHandler {
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-
         exchange.getResponseHeaders().set(
                 "Access-Control-Allow-Origin", "*"
         );
@@ -31,12 +31,20 @@ public class ClientHandler implements HttpHandler {
             getClients(exchange);
         } else if (method.equals("POST")) {
             addClient(exchange);
+        } else if (method.equals("PUT")) {
+            updateClient(exchange);
+        }else if (method.equals("DELETE")) {
+            deleteClient(exchange);
         } else {
-            exchange.getResponseHeaders().set("Allow", "GET, POST");
-            send(exchange, 405, "{\"error\":\"Method not allowed\"}");
+            exchange.getResponseHeaders().set(
+                    "Allow", "GET, POST, PUT, DELETE"
+            );
+            send(exchange, 405,
+                    "{\"error\":\"Method not allowed\"}");
         }
     }
 
+    // GET: Retrieve all clients
     private void getClients(HttpExchange exchange) throws IOException {
         try {
             List<Client> clients = ClientDAO.getAllClients();
@@ -44,12 +52,21 @@ public class ClientHandler implements HttpHandler {
 
             for (int i = 0; i < clients.size(); i++) {
                 Client client = clients.get(i);
-                if (i > 0) json.append(",");
+
+                if (i > 0) {
+                    json.append(",");
+                }
 
                 json.append("{")
-                        .append("\"clientId\":").append(client.getClientId()).append(",")
-                        .append("\"fullName\":\"").append(escapeJson(client.getFullName())).append("\",")
-                        .append("\"email\":\"").append(escapeJson(client.getEmail())).append("\"")
+                        .append("\"clientId\":")
+                        .append(client.getClientId())
+                        .append(",")
+                        .append("\"fullName\":\"")
+                        .append(escapeJson(client.getFullName()))
+                        .append("\",")
+                        .append("\"email\":\"")
+                        .append(escapeJson(client.getEmail()))
+                        .append("\"")
                         .append("}");
             }
 
@@ -58,21 +75,27 @@ public class ClientHandler implements HttpHandler {
 
         } catch (RuntimeException e) {
             e.printStackTrace();
-            send(exchange, 500, "{\"error\":\"Unable to retrieve clients\"}");
+            send(exchange, 500,
+                    "{\"error\":\"Unable to retrieve clients\"}");
         }
     }
 
+    // POST: Add a client
     private void addClient(HttpExchange exchange) throws IOException {
         String body;
+
         try (InputStream input = exchange.getRequestBody()) {
-            body = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            body = new String(
+                    input.readAllBytes(),
+                    StandardCharsets.UTF_8
+            );
         }
 
         String name = extractJsonString(body, "fullName");
         String email = extractJsonString(body, "email");
 
-        if (name == null || name.isBlank() ||
-                email == null || email.isBlank()) {
+        if (name == null || name.isBlank()
+                || email == null || email.isBlank()) {
             send(exchange, 400,
                     "{\"error\":\"Full name and email are required\"}");
             return;
@@ -80,42 +103,147 @@ public class ClientHandler implements HttpHandler {
 
         try {
             ClientDAO.addClient(name.trim(), email.trim());
-            send(exchange, 201, "{\"message\":\"Client created successfully\"}");
+
+            send(exchange, 201,
+                    "{\"message\":\"Client created successfully\"}");
+
         } catch (SQLException e) {
             e.printStackTrace();
-            send(exchange, 500, "{\"error\":\"Unable to create client\"}");
+            send(exchange, 500,
+                    "{\"error\":\"Unable to create client. Check whether the email already exists.\"}");
         }
     }
 
+    // DELETE: Remove a client by ID
+    private void deleteClient(HttpExchange exchange)
+            throws IOException {
+
+        String query = exchange.getRequestURI().getQuery();
+
+        if (query == null || !query.startsWith("id=")) {
+            send(exchange, 400,
+                    "{\"error\":\"Client ID is required\"}");
+            return;
+        }
+
+        try {
+            int clientId = Integer.parseInt(query.substring(3));
+
+            if (clientId <= 0) {
+                send(exchange, 400,
+                        "{\"error\":\"Invalid client ID\"}");
+                return;
+            }
+
+            ClientDAO.deleteClient(clientId);
+
+            send(exchange, 200,
+                    "{\"message\":\"Client deleted successfully\"}");
+
+        } catch (NumberFormatException e) {
+            send(exchange, 400,
+                    "{\"error\":\"Invalid client ID\"}");
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            send(exchange, 500,
+                    "{\"error\":\"Unable to delete client. The client may not exist or may be linked to a legal case.\"}");
+        }
+    }
+
+    // Extract string values from the JSON request
     private String extractJsonString(String json, String key) {
         Pattern pattern = Pattern.compile(
-                "\"" + Pattern.quote(key) + "\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\""
+                "\"" + Pattern.quote(key)
+                        + "\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\""
         );
 
         Matcher matcher = pattern.matcher(json);
-        if (!matcher.find()) return null;
+
+        if (!matcher.find()) {
+            return null;
+        }
 
         return matcher.group(1)
                 .replace("\\\"", "\"")
                 .replace("\\\\", "\\");
     }
 
+    // Send an HTTP response
     private void send(HttpExchange exchange, int status, String body)
             throws IOException {
+
         byte[] response = body.getBytes(StandardCharsets.UTF_8);
 
         exchange.getResponseHeaders().set(
                 "Content-Type", "application/json; charset=UTF-8"
         );
+
         exchange.sendResponseHeaders(status, response.length);
 
         try (OutputStream output = exchange.getResponseBody()) {
             output.write(response);
+        } finally {
+            exchange.close();
         }
     }
 
+    // Escape special characters for JSON
     private String escapeJson(String value) {
-        if (value == null) return "";
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+        if (value == null) {
+            return "";
+        }
+
+        return value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r");
     }
+
+
+    private void updateClient(HttpExchange exchange) throws IOException {
+        String query = exchange.getRequestURI().getQuery();
+
+        if (query == null || !query.startsWith("id=")) {
+            send(exchange, 400, "{\"error\":\"Client ID is required\"}");
+            return;
+        }
+
+        int clientId;
+
+        try {
+            clientId = Integer.parseInt(query.substring(3));
+        } catch (NumberFormatException e) {
+            send(exchange, 400, "{\"error\":\"Invalid client ID\"}");
+            return;
+        }
+
+        String body;
+
+        try (InputStream input = exchange.getRequestBody()) {
+            body = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+
+        String name = extractJsonString(body, "fullName");
+        String email = extractJsonString(body, "email");
+
+        if (name == null || name.isBlank()
+                || email == null || email.isBlank()) {
+            send(exchange, 400,
+                    "{\"error\":\"Full name and email are required\"}");
+            return;
+        }
+
+        try {
+            ClientDAO.updateClient(clientId, name.trim(), email.trim());
+            send(exchange, 200,
+                    "{\"message\":\"Client updated successfully\"}");
+        } catch (SQLException e) {
+            e.printStackTrace();
+            send(exchange, 500,
+                    "{\"error\":\"Unable to update client\"}");
+        }
+    }
+
 }
+

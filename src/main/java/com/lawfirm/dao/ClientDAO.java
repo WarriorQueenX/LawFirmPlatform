@@ -28,6 +28,46 @@ public class ClientDAO {
         }
     }
 
+    public static void deleteClient(int clientId) throws SQLException {
+        String sql = "DELETE FROM CLIENT WHERE CLIENT_ID = ?";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setInt(1, clientId);
+
+            int rowsDeleted = pstmt.executeUpdate();
+
+            if (rowsDeleted == 0) {
+                throw new SQLException("Client not found");
+            }
+        }
+    }
+
+    public static void updateClient(int clientId, String fullName, String email)
+            throws SQLException {
+
+        String sql = """
+        UPDATE CLIENT
+        SET FULL_NAME = ?, EMAIL = ?
+        WHERE CLIENT_ID = ?
+        """;
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, fullName);
+            pstmt.setString(2, email);
+            pstmt.setInt(3, clientId);
+
+            int rowsUpdated = pstmt.executeUpdate();
+
+            if (rowsUpdated == 0) {
+                throw new SQLException("Client not found");
+            }
+        }
+    }
+
     public static List<Client> getAllClients() {
 
         List<Client> clients = new ArrayList<>();
@@ -53,5 +93,4 @@ public class ClientDAO {
         }
         return clients;
     }
-
 }

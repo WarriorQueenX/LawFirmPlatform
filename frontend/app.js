@@ -1,21 +1,19 @@
 
-const API_URL = "http://localhost:8082/api/clients";
+const API_URL = "/api/clients";
 
 const clientTable = document.getElementById("clientTable");
 const clientCount = document.getElementById("clientCount");
 const message = document.getElementById("message");
 const refreshButton = document.getElementById("refreshButton");
+const clientForm = document.getElementById("clientForm");
 
 async function loadClients() {
-    message.textContent = "Loading clients from Oracle…";
+    message.textContent = "Loading clients...";
     refreshButton.disabled = true;
 
     try {
         const response = await fetch(API_URL);
-
-        if (!response.ok) {
-            throw new Error(`Server returned HTTP ${response.status}`);
-        }
+        if (!response.ok) throw new Error("Unable to load clients");
 
         const clients = await response.json();
 
@@ -25,49 +23,131 @@ async function loadClients() {
         if (clients.length === 0) {
             clientTable.innerHTML =
                 '<tr><td colspan="4">No clients found.</td></tr>';
-        } else {
-            for (const client of clients) {
-                const row = document.createElement("tr");
+        }
 
-                const idCell = document.createElement("td");
-                idCell.textContent = client.clientId;
+        for (const client of clients) {
+            const row = document.createElement("tr");
 
-                const nameCell = document.createElement("td");
-                nameCell.textContent = client.fullName ?? "";
+            const idCell = document.createElement("td");
+            idCell.textContent = client.clientId;
 
-                const emailCell = document.createElement("td");
-                emailCell.textContent = client.email ?? "";
+            const nameCell = document.createElement("td");
+            nameCell.textContent = client.fullName ?? "";
 
-                const statusCell = document.createElement("td");
-                const status = document.createElement("span");
-                status.className = "status";
-                status.textContent = "Registered";
-                statusCell.appendChild(status);
+            const emailCell = document.createElement("td");
+            emailCell.textContent = client.email ?? "";
 
-                row.append(idCell, nameCell, emailCell, statusCell);
-                clientTable.appendChild(row);
-            }
+            const actionCell = document.createElement("td");
+
+            // Edit button
+            const editButton = document.createElement("button");
+            editButton.textContent = "Edit";
+            editButton.className = "edit-button";
+
+            editButton.addEventListener("click", async () => {
+                const fullName = prompt(
+                    "Enter client name:",
+                    client.fullName
+                );
+
+                if (fullName === null) return;
+
+                const email = prompt(
+                    "Enter client email:",
+                    client.email
+                );
+
+                if (email === null) return;
+
+                if (!fullName.trim() || !email.trim()) {
+                    message.textContent =
+                        "Name and email cannot be empty.";
+                    return;
+                }
+
+                try {
+                    const updateResponse = await fetch(
+                        `${API_URL}?id=${client.clientId}`,
+                        {
+                            method: "PUT",
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                fullName: fullName.trim(),
+                                email: email.trim()
+                            })
+                        }
+                    );
+
+                    const result = await updateResponse.json();
+
+                    if (!updateResponse.ok) {
+                        throw new Error(
+                            result.error || "Unable to update client"
+                        );
+                    }
+
+                    message.textContent =
+                        "Client updated successfully.";
+
+                    await loadClients();
+
+                } catch (error) {
+                    message.textContent = error.message;
+                }
+            });
+
+            // Delete button
+            const deleteButton = document.createElement("button");
+            deleteButton.textContent = "Delete";
+            deleteButton.className = "delete-button";
+
+            deleteButton.addEventListener("click", async () => {
+                if (!confirm(`Delete ${client.fullName}?`)) return;
+
+                try {
+                    const deleteResponse = await fetch(
+                        `${API_URL}?id=${client.clientId}`,
+                        { method: "DELETE" }
+                    );
+
+                    const result = await deleteResponse.json();
+
+                    if (!deleteResponse.ok) {
+                        throw new Error(
+                            result.error || "Unable to delete client"
+                        );
+                    }
+
+                    message.textContent =
+                        "Client deleted successfully.";
+
+                    await loadClients();
+
+                } catch (error) {
+                    message.textContent = error.message;
+                }
+            });
+
+            actionCell.append(editButton, deleteButton);
+            row.append(idCell, nameCell, emailCell, actionCell);
+            clientTable.appendChild(row);
         }
 
         message.textContent = "Client records loaded successfully.";
+
     } catch (error) {
         message.textContent =
-            "Could not load clients. Ensure the Java server is running on port 8082.";
-        clientTable.innerHTML =
-            '<tr><td colspan="4">Unable to load client records.</td></tr>';
-
+            "Could not load clients. Check the Java server and database.";
         console.error(error);
+
     } finally {
         refreshButton.disabled = false;
     }
 }
 
-refreshButton.addEventListener("click", loadClients);
-
-loadClients();
-
-const clientForm = document.getElementById("clientForm");
-
+// Add client
 clientForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
@@ -89,10 +169,16 @@ clientForm.addEventListener("submit", async (event) => {
 
         clientForm.reset();
         message.textContent = "Client added successfully.";
+
         await loadClients();
 
     } catch (error) {
         message.textContent = error.message;
-        console.error(error);
     }
 });
+
+// Refresh button
+refreshButton.addEventListener("click", loadClients);
+
+// Initial load
+loadClients();
