@@ -1,4 +1,4 @@
-// LEXORA AUTHENTICATION
+﻿// LEXORA AUTHENTICATION
 
 const loginScreen = document.getElementById("loginScreen");
 const loginForm = document.getElementById("loginForm");
@@ -1309,7 +1309,13 @@ async function loadLegalCases() {
                 document.createTextNode(" "),
                 deleteButton
             );
-            row.appendChild(actions);
+            if (canManageCases) {
+                row.appendChild(actions);
+            } else {
+                row.appendChild(document.createElement("td"));
+                row.lastElementChild.hidden = true;
+            }
+
             table.appendChild(row);
         });
     } catch (error) {
@@ -1671,4 +1677,5 @@ function startDashboard() {
 
 // Must be last: all declarations above must initialize first.
 checkSession();
+
 
