@@ -143,4 +143,55 @@ public class AppointmentDAO {
             }
         }
     }
+
+    public static List<Map<String, Object>> getAppointmentsForClient(int clientId)
+            throws SQLException {
+        return getAppointmentsByOwner("CLIENT_ID", clientId);
+    }
+
+    public static List<Map<String, Object>> getAppointmentsForLawyer(int lawyerId)
+            throws SQLException {
+        return getAppointmentsByOwner("LAWYER_ID", lawyerId);
+    }
+
+    private static List<Map<String, Object>> getAppointmentsByOwner(
+            String column, int ownerId) throws SQLException {
+
+        String sql = """
+        SELECT APPOINTMENT_ID, CLIENT_ID, LAWYER_ID, APPOINTMENT_DATE, TIME_SLOT, APPOINTMENT_MODE, STATUS
+        FROM APPOINTMENT
+        WHERE %s = ?
+        ORDER BY APPOINTMENT_DATE, TIME_SLOT""".formatted(column);
+        // The column is selected only by the two fixed methods above.
+        if (!"CLIENT_ID".equals(column) && !"LAWYER_ID".equals(column)) {
+            throw new IllegalArgumentException("Invalid appointment owner.");
+        }
+
+        List<Map<String, Object>> appointments = new ArrayList<>();
+
+
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, ownerId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> a = new LinkedHashMap<>();
+                    a.put("appointmentId", rs.getInt("APPOINTMENT_ID"));
+                    a.put("clientId", rs.getObject("CLIENT_ID"));
+                    a.put("lawyerId", rs.getObject("LAWYER_ID"));
+                    a.put("appointmentDate", rs.getDate("APPOINTMENT_DATE"));
+                    a.put("timeSlot", rs.getTimestamp("TIME_SLOT"));
+                    a.put("mode", rs.getString("APPOINTMENT_MODE"));
+                    a.put("status", rs.getString("STATUS"));
+                    appointments.add(a);
+                }
+            }
+        }
+
+        return appointments;
+    }
+
 }

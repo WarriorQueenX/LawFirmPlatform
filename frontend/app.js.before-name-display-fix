@@ -1,0 +1,1664 @@
+// LEXORA AUTHENTICATION
+
+const loginScreen = document.getElementById("loginScreen");
+const loginForm = document.getElementById("loginForm");
+const loginMessage = document.getElementById("loginMessage");
+const loginButton = document.getElementById("loginButton");
+const logoutButton = document.getElementById("logoutButton");
+const currentUserLabel = document.getElementById("currentUserLabel");
+
+let currentUser = null;
+let dashboardStarted = false;
+
+async function checkSession() {
+    try {
+        const response = await fetch("/api/auth/session", {
+            method: "GET",
+            credentials: "same-origin"
+        });
+
+        if (!response.ok) {
+            showLogin();
+            return;
+        }
+
+        currentUser = await response.json();
+        showDashboard();
+    } catch (error) {
+        showLogin();
+        loginMessage.textContent =
+            "Unable to connect to the server. Please try again.";
+    }
+}
+
+function showLogin() {
+    currentUser = null;
+    loginScreen.hidden = false;
+    document.querySelector(".sidebar").hidden = true;
+    document.querySelector(".main").hidden = true;
+}
+
+function showDashboard() {
+    loginScreen.hidden = true;
+    document.querySelector(".sidebar").hidden = false;
+    document.querySelector(".main").hidden = false;
+
+    if (currentUserLabel) {
+        currentUserLabel.textContent =
+            `${currentUser.username} (${currentUser.role})`;
+    }
+
+    if (!dashboardStarted) {
+        dashboardStarted = true;
+        startDashboard();
+    }
+
+    applyRoleVisibility();
+}
+
+loginForm?.addEventListener("submit", async event => {
+    event.preventDefault();
+
+    loginButton.disabled = true;
+    loginMessage.textContent = "Signing in...";
+
+    try {
+        const response = await fetch("/api/auth/login", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                username: document.getElementById("loginUsername").value.trim(),
+                password: document.getElementById("loginPassword").value
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || "Login failed.");
+        }
+
+        const sessionResponse = await fetch("/api/auth/session", {
+            credentials: "same-origin"
+        });
+
+        if (!sessionResponse.ok) {
+            throw new Error("Login succeeded, but session verification failed.");
+        }
+
+        currentUser = await sessionResponse.json();
+        loginForm.reset();
+        loginMessage.textContent = "";
+        showDashboard();
+
+    } catch (error) {
+        loginMessage.textContent = error.message;
+    } finally {
+        loginButton.disabled = false;
+    }
+});
+
+logoutButton?.addEventListener("click", async () => {
+    logoutButton.disabled = true;
+
+    try {
+        await fetch("/api/auth/session", {
+            method: "POST",
+            credentials: "same-origin"
+        });
+    } finally {
+        currentUser = null;
+        dashboardStarted = false;
+        logoutButton.disabled = false;
+        showLogin();
+        loginMessage.textContent = "You have been signed out.";
+    }
+});
+
+function applyRoleVisibility() {
+    if (!currentUser) return;
+
+    const role = currentUser.role;
+
+    const permissions = {
+        ADMIN: [
+            "clients", "lawyers", "appointments", "cases",
+            "branches", "documents", "notifications"
+        ],
+        BRANCH_MANAGER: [
+            "clients", "lawyers", "appointments", "cases",
+            "branches", "documents", "notifications"
+        ],
+        LAWYER: [
+            "appointments", "cases", "documents", "notifications"
+        ],
+        CLIENT: [
+            "appointments", "cases", "notifications"
+        ]
+    };
+
+    const allowedSections = permissions[role] || [];
+
+    document.querySelectorAll(".sidebar .nav-item").forEach(link => {
+        const sectionId = link.getAttribute("href")?.slice(1);
+        link.hidden = !(
+            sectionId === "dashboard" ||
+            allowedSections.includes(sectionId)
+        );
+    });
+
+    document.querySelectorAll(".main > .panel, .main > .content-section")
+        .forEach(section => {
+            section.hidden = !(
+                section.id === "dashboard" ||
+                allowedSections.includes(section.id)
+            );
+        });
+
+    const stats = document.querySelector(".main > .stats");
+    if (stats) {
+        stats.hidden = role !== "ADMIN" &&
+            role !== "BRANCH_MANAGER";
+    }
+}
+
+const API_URL = "/api/clients";
+const LAWYER_API = "/api/lawyers";
+const CASE_API = "/api/cases";
+const APPOINTMENT_API = "/api/appointments";
+
+const $ = id => document.getElementById(id);
+
+const clientTable = $("clientTable");
+const clientCount = $("clientCount");
+const message = $("message");
+const refreshButton = $("refreshButton");
+const clientForm = $("clientForm");
+
+const lawyerTable = $("lawyerTable");
+const lawyerCount = $("lawyerCount");
+const caseTable = $("caseTable");
+const caseCount = $("caseCount");
+
+const appointmentTable = $("appointmentTable");
+const appointmentMessage = $("appointmentMessage");
+const appointmentForm = $("appointmentForm");
+const refreshAppointmentsButton = $("refreshAppointmentsButton");
+
+let clientsCache = [];
+let lawyersCache = [];
+
+function addCell(row, value) {
+    const cell = document.createElement("td");
+    cell.textContent = value == null || value === "" ? "—" : value;
+    row.appendChild(cell);
+    return cell;
+}
+
+async function requestJSON(url, options = {}) {
+    const response = await fetch(url, options);
+    const text = await response.text();
+
+    let data;
+    try {
+        data = text ? JSON.parse(text) : null;
+    } catch {
+        throw new Error("The server returned an invalid response.");
+    }
+
+    if (!response.ok) {
+        throw new Error(data?.error || `Request failed (${response.status})`);
+    }
+
+    return data;
+}
+
+// CLIENT CRUD
+async function loadClients() {
+    refreshButton.disabled = true;
+
+    try {
+        const clients = await requestJSON(API_URL);
+        clientsCache = Array.isArray(clients) ? clients : [];
+
+        clientTable.replaceChildren();
+        clientCount.textContent = clientsCache.length;
+
+        if (!clientsCache.length) {
+            clientTable.innerHTML =
+                '<tr><td colspan="4">No clients found.</td></tr>';
+        }
+
+        clientsCache.forEach(client => {
+            const row = document.createElement("tr");
+            addCell(row, client.clientId);
+            addCell(row, client.fullName);
+            addCell(row, client.email);
+
+            const actions = addCell(row, "");
+            const edit = document.createElement("button");
+            edit.textContent = "Edit";
+            edit.className = "edit-button";
+
+            edit.addEventListener("click", async () => {
+                const fullName = prompt("Enter client name:", client.fullName);
+                if (fullName === null) return;
+
+                const email = prompt("Enter client email:", client.email);
+                if (email === null) return;
+
+                if (!fullName.trim() || !email.trim()) {
+                    message.textContent = "Name and email are required.";
+                    return;
+                }
+
+                try {
+                    await requestJSON(`${API_URL}?id=${client.clientId}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            fullName: fullName.trim(),
+                            email: email.trim()
+                        })
+                    });
+
+                    message.textContent = "Client updated successfully.";
+                    await loadClients();
+                    await loadAppointments();
+                } catch (error) {
+                    message.textContent = error.message;
+                }
+            });
+
+            const remove = document.createElement("button");
+            remove.textContent = "Delete";
+            remove.className = "delete-button";
+
+            remove.addEventListener("click", async () => {
+                if (!confirm(`Delete ${client.fullName}?`)) return;
+
+                try {
+                    await requestJSON(`${API_URL}?id=${client.clientId}`, {
+                        method: "DELETE"
+                    });
+
+                    message.textContent = "Client deleted successfully.";
+                    await loadClients();
+                    await loadAppointments();
+                } catch (error) {
+                    message.textContent = error.message;
+                }
+            });
+
+            actions.append(edit, remove);
+            clientTable.appendChild(row);
+        });
+
+        message.textContent = "Client records loaded successfully.";
+        populateAppointmentDropdowns();
+        populateClientAccountDropdown();
+
+    } catch (error) {
+        message.textContent = "Unable to load clients: " + error.message;
+        console.error("Client loading failed:", error);
+    } finally {
+        refreshButton.disabled = false;
+    }
+}
+
+clientForm.addEventListener("submit", async event => {
+    event.preventDefault();
+
+    const fullName = $("fullName").value.trim();
+    const email = $("email").value.trim();
+
+    try {
+        await requestJSON(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fullName, email })
+        });
+
+        clientForm.reset();
+        message.textContent = "Client added successfully.";
+        await loadClients();
+    } catch (error) {
+        message.textContent = error.message;
+    }
+});
+
+// LAWYERS
+
+async function loadLawyers() {
+    const table = document.getElementById("lawyerTable");
+    const count = document.getElementById("lawyerCount");
+
+    if (!table) return;
+
+    table.innerHTML =
+        '<tr><td colspan="5">Loading lawyers...</td></tr>';
+
+    try {
+        const lawyers = await requestJSON(LAWYER_API);
+
+        lawyersCache = lawyers;
+        renderLawyers(lawyers);
+        populateAppointmentDropdowns();
+
+    } catch (error) {
+        table.innerHTML =
+            '<tr><td colspan="5">Unable to load lawyers.</td></tr>';
+
+        if (count) count.textContent = "0 lawyers";
+        console.error("Lawyer loading error:", error);
+    }
+}
+
+function renderLawyers(lawyers) {
+    const table = document.getElementById("lawyerTable");
+    const count = document.getElementById("lawyerCount");
+
+    if (!table) return;
+
+    table.innerHTML = "";
+
+    if (count) {
+        count.textContent = `${lawyers.length} lawyers`;
+    }
+
+    if (lawyers.length === 0) {
+        table.innerHTML =
+            '<tr><td colspan="6">No matching lawyers found.</td></tr>';
+        return;
+    }
+
+    lawyers.forEach(lawyer => {
+        const row = document.createElement("tr");
+
+        [
+            lawyer.lawyerId,
+            lawyer.fullName,
+            lawyer.specialization,
+            lawyer.experienceYears,
+            lawyer.consultationFee
+        ].forEach(value => addCell(row, value ?? "—"));
+
+        const actions = document.createElement("td");
+
+        const editButton = document.createElement("button");
+        editButton.type = "button";
+        editButton.textContent = "Edit";
+        editButton.addEventListener("click", () => editLawyer(lawyer));
+
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.textContent = "Delete";
+        deleteButton.addEventListener("click", () => deleteLawyer(lawyer));
+
+        actions.append(editButton, document.createTextNode(" "), deleteButton);
+        row.appendChild(actions);
+        table.appendChild(row);
+    });
+}
+
+function filterLawyers() {
+    const search = (
+        document.getElementById("lawyerSearch")?.value || ""
+    ).trim().toLowerCase();
+
+    const specialization = (
+        document.getElementById("specializationFilter")?.value || ""
+    ).trim().toLowerCase();
+
+    const experienceInput =
+        document.getElementById("experienceFilter")?.value;
+
+    const feeInput =
+        document.getElementById("maxFeeFilter")?.value;
+
+    const minExperience =
+        experienceInput === "" || experienceInput == null
+            ? null
+            : Number(experienceInput);
+
+    const maxFee =
+        feeInput === "" || feeInput == null
+            ? null
+            : Number(feeInput);
+
+    const filtered = lawyersCache.filter(lawyer => {
+        const name = String(lawyer.fullName || "").toLowerCase();
+        const area = String(lawyer.specialization || "").toLowerCase();
+        const years = Number(lawyer.experienceYears);
+        const fee = Number(lawyer.consultationFee);
+
+        return (
+            name.includes(search) &&
+            area.includes(specialization) &&
+            (minExperience === null ||
+                (!Number.isNaN(years) && years >= minExperience)) &&
+            (maxFee === null ||
+                (!Number.isNaN(fee) && fee <= maxFee))
+        );
+    });
+
+    renderLawyers(filtered);
+}
+
+document.getElementById("lawyerFilterForm")
+    ?.addEventListener("submit", event => {
+        event.preventDefault();
+        filterLawyers();
+    });
+
+document.getElementById("clearLawyerFilters")
+    ?.addEventListener("click", () => {
+        document.getElementById("lawyerFilterForm").reset();
+        renderLawyers(lawyersCache);
+    });
+
+// LEGAL CASES
+
+async function loadCases() {
+    try {
+        const cases = await requestJSON(CASE_API);
+
+        if (caseCount) {
+            caseCount.textContent = `${cases.length} cases`;
+        }
+
+        const activeCaseCount = $("activeCaseCount");
+        if (activeCaseCount) {
+            activeCaseCount.textContent = cases.filter(
+                item => !["Completed", "Closed"].includes(item.status)
+            ).length;
+        }
+    } catch (error) {
+        if (caseCount) {
+            caseCount.textContent = "Unavailable";
+        }
+        console.error("Case loading failed:", error);
+    }
+}
+
+async function populateAppointmentDropdowns() {
+    const clientSelect = $("appointmentClientId");
+    const lawyerSelect = $("appointmentLawyerId");
+
+    if (!clientSelect || !lawyerSelect) return;
+
+    const selectedClient = clientSelect.value;
+    const selectedLawyer = lawyerSelect.value;
+
+    clientSelect.replaceChildren(new Option("Client Name", ""));
+    lawyerSelect.replaceChildren(new Option("Loading lawyers...", ""));
+
+    if (currentUser?.role === "CLIENT") {
+        // Use the authenticated client's ID, never a submitted ID.
+        if (currentUser.clientId != null) {
+            clientSelect.add(new Option(
+                currentUser.username,
+                currentUser.clientId
+            ));
+            clientSelect.value = String(currentUser.clientId);
+        }
+
+        clientSelect.disabled = true;
+    } else {
+        clientSelect.disabled = false;
+
+        clientsCache.forEach(client => {
+            clientSelect.add(new Option(
+                `${client.fullName} (ID: ${client.clientId})`,
+                client.clientId
+            ));
+        });
+
+        if (selectedClient) {
+            clientSelect.value = selectedClient;
+        }
+    }
+
+    try {
+        const response = await fetch("/api/lawyer-directory", {
+            credentials: "same-origin"
+        });
+
+        if (!response.ok) {
+            throw new Error("Unable to load lawyer directory");
+        }
+
+        const lawyers = await response.json();
+
+        lawyerSelect.replaceChildren(new Option("Lawyer Name", ""));
+
+        lawyers.forEach(lawyer => {
+            lawyerSelect.add(new Option(
+                `${lawyer.fullName} (ID: ${lawyer.lawyerId})`,
+                lawyer.lawyerId
+            ));
+        });
+
+        if (selectedLawyer) {
+            lawyerSelect.value = selectedLawyer;
+        }
+    } catch (error) {
+        console.error("Lawyer dropdown error:", error);
+        lawyerSelect.replaceChildren(
+            new Option("Unable to load lawyers", "")
+        );
+    }
+}
+
+// APPOINTMENTS
+async function loadAppointments() {
+    if (!appointmentTable) return;
+
+    if (appointmentMessage) {
+        appointmentMessage.textContent = "Loading appointments...";
+    }
+
+    try {
+        const appointments = await requestJSON(APPOINTMENT_API);
+        appointmentTable.replaceChildren();
+
+        if ($("appointmentCount")) {
+            $("appointmentCount").textContent = appointments.length;
+        }
+
+        if (!appointments.length) {
+            appointmentTable.innerHTML =
+                '<tr><td colspan="8">No appointments found.</td></tr>';
+        }
+
+        appointments.forEach(appointment => {
+            const row = document.createElement("tr");
+            addCell(row, appointment.appointmentId);
+
+            const client = clientsCache.find(
+                item => Number(item.clientId) === Number(appointment.clientId)
+            );
+            const lawyer = lawyersCache.find(
+                item => Number(item.lawyerId) === Number(appointment.lawyerId)
+            );
+
+            addCell(row, client?.fullName || `Client #${appointment.clientId}`);
+            addCell(row, lawyer?.fullName || `Lawyer #${appointment.lawyerId}`);
+
+            addCell(row, formatDate(appointment.appointmentDate));
+            addCell(row, formatTime(appointment.timeSlot));
+            addCell(row, appointment.mode);
+            addCell(row, appointment.status);
+
+            const actionCell = addCell(row, "");
+            const statusSelect = document.createElement("select");
+            statusSelect.className = "appointment-status-select";
+
+            ["Confirmed", "Completed", "Cancelled"].forEach(status => {
+                statusSelect.add(new Option(status, status));
+            });
+
+            statusSelect.value = appointment.status || "Confirmed";
+
+            const updateButton = document.createElement("button");
+            updateButton.type = "button";
+            updateButton.textContent = "Update";
+
+            updateButton.addEventListener("click", async () => {
+                try {
+                    await requestJSON(APPOINTMENT_API, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            appointmentId: appointment.appointmentId,
+                            status: statusSelect.value
+                        })
+                    });
+
+                    appointmentMessage.textContent =
+                        "Appointment status updated.";
+                    await loadAppointments();
+                } catch (error) {
+                    appointmentMessage.textContent = error.message;
+                }
+            });
+
+            actionCell.append(statusSelect, updateButton);
+            appointmentTable.appendChild(row);
+        });
+
+        if (appointmentMessage) {
+            appointmentMessage.textContent =
+                "Appointment records loaded successfully.";
+        }
+    } catch (error) {
+        appointmentTable.innerHTML =
+            '<tr><td colspan="8">Unable to load appointments. Check the server console.</td></tr>';
+
+        if (appointmentMessage) {
+            appointmentMessage.textContent =
+                "Unable to load appointments: " + error.message;
+        }
+        console.error("Appointment loading failed:", error);
+    }
+}
+
+function formatDate(value) {
+    if (!value) return "—";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+        ? String(value)
+        : date.toLocaleDateString();
+}
+
+function formatTime(value) {
+    if (!value) return "—";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+        ? String(value)
+        : date.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit"
+        });
+}
+
+appointmentForm?.addEventListener("submit", async event => {
+    event.preventDefault();
+
+    const clientId = $("appointmentClientId").value;
+    const lawyerId = $("appointmentLawyerId").value;
+    const appointmentDate = $("appointmentDateTime").value;
+    const mode = $("appointmentMode").value;
+
+    if (!clientId || !lawyerId || !appointmentDate || !mode) {
+        appointmentMessage.textContent =
+            "Please complete every appointment field.";
+        return;
+    }
+
+    try {
+        await requestJSON(APPOINTMENT_API, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                clientId: Number(clientId),
+                lawyerId: Number(lawyerId),
+                appointmentDate,
+                mode
+            })
+        });
+
+        appointmentForm.reset();
+        await populateAppointmentDropdowns();
+        appointmentMessage.textContent = "Appointment booked successfully.";
+        await loadAppointments();
+    } catch (error) {
+        appointmentMessage.textContent = "Booking failed: " + error.message;
+    }
+});
+
+refreshButton?.addEventListener("click", async () => {
+    await loadClients();
+    await loadLawyers();
+    await loadCases();
+    await loadAppointments();
+});
+
+refreshAppointmentsButton?.addEventListener("click", loadAppointments);
+
+async function refreshDashboard() {
+    await Promise.all([
+        loadClients(),
+        loadLawyers(),
+        loadCases()
+    ]);
+    await loadAppointments();
+}
+
+// DOCUMENTS
+
+const DOCUMENT_API = "/api/documents";
+
+const documentTable = document.getElementById("documentTable");
+const documentMessage = document.getElementById("documentMessage");
+const documentForm = document.getElementById("documentForm");
+const refreshDocumentsButton =
+    document.getElementById("refreshDocumentsButton");
+
+async function loadDocuments() {
+    if (!documentTable) return;
+
+    try {
+        const response = await fetch(DOCUMENT_API);
+        const documents = await response.json();
+
+        if (!response.ok) {
+            throw new Error(documents.error || "Unable to load documents");
+        }
+
+        documentTable.replaceChildren();
+
+        if (documents.length === 0) {
+            documentTable.innerHTML =
+                '<tr><td colspan="6">No document records found.</td></tr>';
+        }
+
+        documents.forEach(documentRecord => {
+            const row = document.createElement("tr");
+
+            addCell(row, documentRecord.documentId);
+            addCell(row, documentRecord.caseId);
+            addCell(row, documentRecord.uploadedBy);
+            addCell(row, documentRecord.category);
+            addCell(row, documentRecord.uploadDate);
+
+            const actionCell = addCell(row, "");
+            const deleteButton = document.createElement("button");
+
+            deleteButton.type = "button";
+            deleteButton.textContent = "Delete";
+            deleteButton.className = "delete-button";
+
+            deleteButton.addEventListener("click", async () => {
+                if (!confirm(
+                    `Delete document record ${documentRecord.documentId}?`
+                )) return;
+
+                try {
+                    const result = await fetch(
+                        `${DOCUMENT_API}?id=${documentRecord.documentId}`,
+                        { method: "DELETE" }
+                    );
+
+                    const data = await result.json();
+
+                    if (!result.ok) {
+                        throw new Error(
+                            data.error || "Unable to delete document"
+                        );
+                    }
+
+                    documentMessage.textContent =
+                        "Document record deleted successfully.";
+
+                    await loadDocuments();
+                } catch (error) {
+                    documentMessage.textContent = error.message;
+                }
+            });
+
+            actionCell.appendChild(deleteButton);
+            documentTable.appendChild(row);
+        });
+
+        documentMessage.textContent =
+            "Document records loaded successfully.";
+    } catch (error) {
+        documentTable.innerHTML =
+            '<tr><td colspan="6">Unable to load document records.</td></tr>';
+        documentMessage.textContent =
+            "Document loading failed: " + error.message;
+        console.error("Document loading failed:", error);
+    }
+}
+
+async function populateDocumentCases() {
+    const caseSelect = document.getElementById("documentCaseId");
+    if (!caseSelect) return;
+
+    try {
+        const response = await fetch("/api/cases");
+        const cases = await response.json();
+
+        if (!response.ok) {
+            throw new Error("Unable to load legal cases");
+        }
+
+        caseSelect.replaceChildren(
+            new Option("Select legal case", "")
+        );
+
+        cases.forEach(legalCase => {
+            caseSelect.add(new Option(
+                `Case #${legalCase.caseId} — ${legalCase.category || "General"}`,
+                legalCase.caseId
+            ));
+        });
+    } catch (error) {
+        documentMessage.textContent =
+            "Unable to load cases: " + error.message;
+    }
+}
+
+documentForm?.addEventListener("submit", async event => {
+    event.preventDefault();
+
+    const caseId = document.getElementById("documentCaseId").value;
+    const uploadedBy =
+        document.getElementById("documentUploader").value.trim();
+    const category =
+        document.getElementById("documentCategory").value.trim();
+
+    try {
+        const response = await fetch(DOCUMENT_API, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                caseId: Number(caseId),
+                uploadedBy,
+                category
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || "Unable to register document");
+        }
+
+        documentForm.reset();
+        documentMessage.textContent =
+            "Document record registered successfully.";
+
+        await loadDocuments();
+    } catch (error) {
+        documentMessage.textContent =
+            "Registration failed: " + error.message;
+    }
+});
+
+refreshDocumentsButton?.addEventListener("click", loadDocuments);
+
+
+// NOTIFICATIONS
+
+const NOTIFICATION_API = "/api/notifications";
+
+const notificationTable = document.getElementById("notificationTable");
+const notificationMessage = document.getElementById("notificationMessage");
+const notificationForm = document.getElementById("notificationForm");
+
+async function loadNotifications() {
+    if (!notificationTable) return;
+
+    try {
+        const response = await fetch(NOTIFICATION_API);
+        const notifications = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                notifications.error || "Unable to load notifications"
+            );
+        }
+
+        notificationTable.replaceChildren();
+
+        if (!notifications.length) {
+            notificationTable.innerHTML =
+                '<tr><td colspan="7">No notifications found.</td></tr>';
+        }
+
+        notifications.forEach(notification => {
+            const row = document.createElement("tr");
+
+            addCell(row, notification.notificationId);
+            addCell(row, notification.recipientId);
+            addCell(row, notification.recipientType);
+            addCell(row, notification.message);
+            addCell(row, notification.sentOn);
+
+            const isRead = Number(notification.isRead) === 1;
+            addCell(row, isRead ? "Read" : "Unread");
+
+            const actionCell = addCell(row, "");
+
+            if (!isRead) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.textContent = "Mark as read";
+
+                button.addEventListener("click", async () => {
+                    try {
+                        const result = await fetch(NOTIFICATION_API, {
+                            method: "PUT",
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                notificationId: notification.notificationId
+                            })
+                        });
+
+                        const data = await result.json();
+
+                        if (!result.ok) {
+                            throw new Error(
+                                data.error || "Unable to update notification"
+                            );
+                        }
+
+                        notificationMessage.textContent =
+                            "Notification marked as read.";
+                        await loadNotifications();
+                    } catch (error) {
+                        notificationMessage.textContent = error.message;
+                    }
+                });
+
+                actionCell.appendChild(button);
+            } else {
+                actionCell.textContent = "—";
+            }
+
+            notificationTable.appendChild(row);
+        });
+
+        notificationMessage.textContent =
+            "Notification records loaded successfully.";
+    } catch (error) {
+        notificationTable.innerHTML =
+            '<tr><td colspan="7">Unable to load notifications.</td></tr>';
+        notificationMessage.textContent =
+            "Notification error: " + error.message;
+        console.error(error);
+    }
+}
+
+notificationForm?.addEventListener("submit", async event => {
+    event.preventDefault();
+
+    const recipientId =
+        document.getElementById("notificationRecipientId").value;
+    const recipientType =
+        document.getElementById("notificationRecipientType").value;
+    const messageText =
+        document.getElementById("notificationText").value.trim();
+
+    try {
+        const response = await fetch(NOTIFICATION_API, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                recipientId: Number(recipientId),
+                recipientType,
+                message: messageText
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || "Unable to create notification");
+        }
+
+        notificationForm.reset();
+        notificationMessage.textContent =
+            "Notification created successfully.";
+
+        await loadNotifications();
+    } catch (error) {
+        notificationMessage.textContent =
+            "Creation failed: " + error.message;
+    }
+});
+
+document.getElementById("refreshNotificationsButton")
+    ?.addEventListener("click", loadNotifications);
+// BRANCH WORKLOAD
+
+const BRANCH_API = "/api/branches";
+
+async function loadBranches() {
+    const table = document.getElementById("branchTable");
+    const branchMessage = document.getElementById("branchMessage");
+
+    if (!table) return;
+
+    table.innerHTML =
+        '<tr><td colspan="9">Loading branch workload...</td></tr>';
+
+    try {
+        const branches = await requestJSON(BRANCH_API);
+        table.replaceChildren();
+
+        if (!branches.length) {
+            table.innerHTML =
+                '<tr><td colspan="9">No branch records found.</td></tr>';
+
+            if (branchMessage) branchMessage.textContent = "";
+            return;
+        }
+
+        branches.forEach(branch => {
+            const row = document.createElement("tr");
+
+            [
+                branch.branchId,
+                branch.branchName,
+                branch.location,
+                branch.maxCapacity,
+                branch.lawyerCount,
+                branch.activeCases,
+                branch.availableSlots,
+                `${Number(branch.capacityUtilization).toFixed(1)}%`
+            ].forEach(value => addCell(row, value ?? "—"));
+
+            const statusCell = addCell(
+                row,
+                branch.workloadStatus ?? "Unknown"
+            );
+            statusCell.className = "workload-status";
+
+            if (branch.workloadStatus === "At Capacity") {
+                statusCell.classList.add("status-full");
+            } else if (branch.workloadStatus === "Near Capacity") {
+                statusCell.classList.add("status-warning");
+            } else {
+                statusCell.classList.add("status-available");
+            }
+
+            table.appendChild(row);
+        });
+
+        if (branchMessage) {
+            branchMessage.textContent =
+                `Loaded workload for ${branches.length} branches.`;
+        }
+    } catch (error) {
+        table.innerHTML =
+            '<tr><td colspan="9">Unable to load branch workload.</td></tr>';
+
+        if (branchMessage) branchMessage.textContent = error.message;
+        console.error("Branch workload error:", error);
+    }
+}
+
+document.getElementById("refreshBranchesButton")
+    ?.addEventListener("click", loadBranches);
+
+
+// ADD LAWYER
+
+const addLawyerForm = document.getElementById("addLawyerForm");
+
+addLawyerForm?.addEventListener("submit", async event => {
+    event.preventDefault();
+
+    const messageElement = document.getElementById("addLawyerMessage");
+    const submitButton = addLawyerForm.querySelector(
+        'button[type="submit"]'
+    );
+
+    const lawyer = {
+        fullName: document.getElementById("newLawyerName").value.trim(),
+        specialization: document.getElementById(
+            "newLawyerSpecialization"
+        ).value.trim(),
+        experienceYears: Number(
+            document.getElementById("newLawyerExperience").value
+        ),
+        consultationFee: Number(
+            document.getElementById("newLawyerFee").value
+        ),
+        branchId: Number(
+            document.getElementById("newLawyerBranch").value
+        ),
+        roleDesignation: document.getElementById("newLawyerRole").value,
+        languages: document.getElementById("newLawyerLanguages").value.trim()
+    };
+
+    if (
+        !lawyer.fullName ||
+        !lawyer.specialization ||
+        !lawyer.roleDesignation ||
+        !Number.isInteger(lawyer.experienceYears) ||
+        lawyer.experienceYears < 0 ||
+        !Number.isInteger(lawyer.branchId) ||
+        lawyer.branchId < 1 ||
+        !Number.isFinite(lawyer.consultationFee) ||
+        lawyer.consultationFee < 0
+    ) {
+        messageElement.textContent = "Please enter valid lawyer details.";
+        return;
+    }
+
+    submitButton.disabled = true;
+    messageElement.textContent = "Adding lawyer...";
+
+    try {
+        await requestJSON(LAWYER_API, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(lawyer)
+        });
+
+        messageElement.textContent = "Lawyer added successfully.";
+        addLawyerForm.reset();
+        await loadLawyers();
+    } catch (error) {
+        messageElement.textContent = error.message;
+        console.error("Add lawyer error:", error);
+    } finally {
+        submitButton.disabled = false;
+    }
+});
+
+async function editLawyer(lawyer) {
+    const fullName = prompt("Full name:", lawyer.fullName);
+    if (fullName === null) return;
+
+    const specialization = prompt(
+        "Specialization:", lawyer.specialization
+    );
+    if (specialization === null) return;
+
+    const experienceYears = prompt(
+        "Years of experience:", lawyer.experienceYears
+    );
+    if (experienceYears === null) return;
+
+    const consultationFee = prompt(
+        "Consultation fee:", lawyer.consultationFee
+    );
+    if (consultationFee === null) return;
+
+    const branchId = prompt("Branch ID:", lawyer.branchId);
+    if (branchId === null) return;
+
+    const languages = prompt("Languages:", lawyer.languages);
+    if (languages === null) return;
+
+    const roleDesignation = prompt(
+        "Role (Partner, Associate, Paralegal, Intern):",
+        lawyer.roleDesignation
+    );
+    if (roleDesignation === null) return;
+
+    const payload = {
+        lawyerId: Number(lawyer.lawyerId),
+        fullName: fullName.trim(),
+        specialization: specialization.trim(),
+        experienceYears: Number(experienceYears),
+        consultationFee: Number(consultationFee),
+        branchId: Number(branchId),
+        languages: languages.trim(),
+        roleDesignation: roleDesignation.trim()
+    };
+
+    if (
+        !payload.fullName ||
+        !payload.specialization ||
+        !payload.languages ||
+        !Number.isInteger(payload.experienceYears) ||
+        payload.experienceYears < 0 ||
+        !Number.isFinite(payload.consultationFee) ||
+        payload.consultationFee < 0 ||
+        !Number.isInteger(payload.branchId) ||
+        payload.branchId <= 0 ||
+        !["Partner", "Associate", "Paralegal", "Intern"]
+            .includes(payload.roleDesignation)
+    ) {
+        alert("Please enter valid lawyer details.");
+        return;
+    }
+
+    try {
+        await requestJSON(LAWYER_API, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        alert("Lawyer updated successfully.");
+        await loadLawyers();
+    } catch (error) {
+        alert("Update failed: " + error.message);
+    }
+}
+
+async function deleteLawyer(lawyer) {
+    if (!confirm(
+        `Delete lawyer "${lawyer.fullName}" (ID: ${lawyer.lawyerId})?`
+    )) return;
+
+    try {
+        await requestJSON(LAWYER_API, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                lawyerId: Number(lawyer.lawyerId)
+            })
+        });
+
+        alert("Lawyer deleted successfully.");
+        await loadLawyers();
+    } catch (error) {
+        alert(
+            "Delete failed. The lawyer may be linked to existing records.\n" +
+            error.message
+        );
+    }
+}
+
+
+// LEGAL CASE MANAGEMENT
+
+const LEGAL_CASE_API = "/api/cases";
+
+async function loadLegalCases() {
+    const table = document.getElementById("caseTable");
+    if (!table) return;
+
+    table.innerHTML = '<tr><td colspan="8">Loading cases...</td></tr>';
+
+    try {
+        const cases = await requestJSON(LEGAL_CASE_API);
+        table.replaceChildren();
+
+        if (!cases.length) {
+            table.innerHTML =
+                '<tr><td colspan="8">No legal cases found.</td></tr>';
+            return;
+        }
+
+        cases.forEach(legalCase => {
+            const row = document.createElement("tr");
+
+            [
+                legalCase.caseId,
+                legalCase.clientId,
+                legalCase.leadPartnerId ?? "—",
+                legalCase.category,
+                legalCase.budget ?? "—",
+                legalCase.status,
+                legalCase.complexity
+            ].forEach(value => addCell(row, value ?? "—"));
+
+            const actions = document.createElement("td");
+
+            const editButton = document.createElement("button");
+            editButton.type = "button";
+            editButton.textContent = "Edit";
+            editButton.addEventListener(
+                "click",
+                () => editLegalCase(legalCase)
+            );
+
+            const deleteButton = document.createElement("button");
+            deleteButton.type = "button";
+            deleteButton.textContent = "Delete";
+            deleteButton.addEventListener(
+                "click",
+                () => deleteLegalCase(legalCase.caseId)
+            );
+
+            actions.append(
+                editButton,
+                document.createTextNode(" "),
+                deleteButton
+            );
+            row.appendChild(actions);
+            table.appendChild(row);
+        });
+    } catch (error) {
+        console.error(error);
+        table.innerHTML =
+            '<tr><td colspan="8">Failed to load cases. Check the server.</td></tr>';
+    }
+}
+
+async function populateCaseDropdowns() {
+    const clientSelect = document.getElementById("caseClientId");
+    const lawyerSelect = document.getElementById("caseLeadPartnerId");
+
+    if (!clientSelect || !lawyerSelect) return;
+
+    try {
+        const [clientsResponse, lawyersResponse] = await Promise.all([
+            fetch(API_URL),
+            fetch(LAWYER_API)
+        ]);
+
+        if (!clientsResponse.ok || !lawyersResponse.ok) {
+            throw new Error("Unable to load clients or lawyers");
+        }
+
+        const clients = await clientsResponse.json();
+        const lawyers = await lawyersResponse.json();
+
+        clientSelect.replaceChildren(new Option("Select client", ""));
+
+        clients.forEach(client => {
+            clientSelect.add(
+                new Option(client.fullName, client.clientId)
+            );
+        });
+
+        lawyerSelect.replaceChildren(
+            new Option("No lead lawyer", "")
+        );
+
+        lawyers.forEach(lawyer => {
+            lawyerSelect.add(
+                new Option(lawyer.fullName, lawyer.lawyerId)
+            );
+        });
+    } catch (error) {
+        console.error("Case dropdown error:", error);
+    }
+}
+
+async function submitLegalCase(event) {
+    event.preventDefault();
+
+    const clientId = Number(
+        document.getElementById("caseClientId").value
+    );
+    const leadValue =
+        document.getElementById("caseLeadPartnerId").value;
+    const category =
+        document.getElementById("caseCategory").value.trim();
+    const budget = Number(
+        document.getElementById("caseBudget").value
+    );
+    const status =
+        document.getElementById("caseStatus").value;
+    const complexity =
+        document.getElementById("caseComplexity").value;
+
+    if (
+        !Number.isInteger(clientId) ||
+        clientId <= 0 ||
+        !category ||
+        !Number.isFinite(budget) ||
+        budget < 0
+    ) {
+        alert("Please enter valid case details.");
+        return;
+    }
+
+    const payload = {
+        clientId,
+        leadPartnerId: leadValue ? Number(leadValue) : null,
+        category,
+        budget,
+        status,
+        complexity
+    };
+
+    try {
+        await requestJSON(LEGAL_CASE_API, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        alert("Legal case created successfully.");
+        document.getElementById("caseForm").reset();
+
+        await loadLegalCases();
+        await refreshDashboard();
+    } catch (error) {
+        alert("Create case failed: " + error.message);
+    }
+}
+
+async function editLegalCase(legalCase) {
+    const category = prompt("Case category:", legalCase.category);
+    if (category === null) return;
+
+    const budgetInput = prompt("Budget:", legalCase.budget ?? "0");
+    if (budgetInput === null) return;
+
+    const status = prompt(
+        "Status (Open, In Progress, Closed):",
+        legalCase.status
+    );
+    if (status === null) return;
+
+    const complexity = prompt(
+        "Complexity (Low, Medium, High, Critical):",
+        legalCase.complexity
+    );
+    if (complexity === null) return;
+
+    const budget = Number(budgetInput);
+
+    if (!category.trim() || !Number.isFinite(budget) || budget < 0) {
+        alert("Enter a valid category and non-negative budget.");
+        return;
+    }
+
+    if (!["Open", "In Progress", "Closed"].includes(status)) {
+        alert("Invalid case status.");
+        return;
+    }
+
+    if (!["Low", "Medium", "High", "Critical"].includes(complexity)) {
+        alert("Invalid case complexity.");
+        return;
+    }
+
+    const payload = {
+        caseId: Number(legalCase.caseId),
+        clientId: Number(legalCase.clientId),
+        leadPartnerId: legalCase.leadPartnerId == null
+            ? null
+            : Number(legalCase.leadPartnerId),
+        category: category.trim(),
+        budget,
+        status,
+        complexity
+    };
+
+    try {
+        await requestJSON(LEGAL_CASE_API, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        alert("Legal case updated successfully.");
+        await loadLegalCases();
+        await refreshDashboard();
+    } catch (error) {
+        alert("Update case failed: " + error.message);
+    }
+}
+
+async function deleteLegalCase(caseId) {
+    if (!confirm(
+        `Delete legal case ${caseId}? This cannot be undone.`
+    )) return;
+
+    try {
+        await requestJSON(LEGAL_CASE_API, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ caseId: Number(caseId) })
+        });
+
+        alert("Legal case deleted successfully.");
+        await loadLegalCases();
+        await refreshDashboard();
+    } catch (error) {
+        alert(
+            "Delete failed. The case may be referenced by other records.\n" +
+            error.message
+        );
+    }
+}
+
+const caseForm = document.getElementById("caseForm");
+
+if (caseForm) {
+    caseForm.addEventListener("submit", submitLegalCase);
+}
+
+
+// LAWYER RECOMMENDATIONS
+
+const RECOMMENDATION_API = "/api/recommendations";
+const recommendationForm =
+    document.getElementById("recommendationForm");
+
+recommendationForm?.addEventListener("submit", async event => {
+    event.preventDefault();
+
+    const category = document
+        .getElementById("recommendationCategory")
+        .value.trim();
+
+    const table = document.getElementById("recommendationTable");
+    const recommendationMessage =
+        document.getElementById("recommendationMessage");
+
+    if (!category) return;
+
+    table.replaceChildren();
+    table.innerHTML =
+        '<tr><td colspan="7">Loading recommendations...</td></tr>';
+    recommendationMessage.textContent = "";
+
+    try {
+        const url =
+            `${RECOMMENDATION_API}?category=${encodeURIComponent(category)}`;
+
+        const lawyers = await requestJSON(url);
+        table.replaceChildren();
+
+        if (!Array.isArray(lawyers) || lawyers.length === 0) {
+            table.innerHTML =
+                '<tr><td colspan="7">No lawyers found.</td></tr>';
+            recommendationMessage.textContent =
+                "Try another case category.";
+            return;
+        }
+
+        lawyers.forEach(lawyer => {
+            const row = document.createElement("tr");
+
+            const reasons = Array.isArray(lawyer.reasons)
+                ? lawyer.reasons.join(", ")
+                : "Consider for review";
+
+            [
+                lawyer.fullName ?? "—",
+                lawyer.specialization ?? "—",
+                `${lawyer.experienceYears ?? 0} years`,
+                lawyer.activeCases ?? 0,
+                lawyer.branchName ?? "Not assigned",
+                lawyer.recommendationScore ?? 0,
+                reasons
+            ].forEach(value => addCell(row, String(value)));
+
+            table.appendChild(row);
+        });
+
+        recommendationMessage.textContent =
+            `${lawyers.length} lawyer(s) returned. ` +
+            "Recommendations are advisory; final assignment requires review.";
+
+    } catch (error) {
+        console.error("Recommendation error:", error);
+        table.innerHTML =
+            '<tr><td colspan="7">Unable to load recommendations.</td></tr>';
+        recommendationMessage.textContent =
+            "Check the server console and try again.";
+    }
+});
+
+
+// CLIENT ACCOUNT CREATION
+
+const clientAccountForm = document.getElementById("clientAccountForm");
+const accountClientSelect = document.getElementById("accountClientId");
+const clientAccountMessage =
+    document.getElementById("clientAccountMessage");
+const createClientAccountButton =
+    document.getElementById("createClientAccountButton");
+
+function populateClientAccountDropdown() {
+    if (!accountClientSelect) return;
+
+    const selectedValue = accountClientSelect.value;
+    accountClientSelect.replaceChildren();
+
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Select existing client";
+    accountClientSelect.appendChild(placeholder);
+
+    clientsCache.forEach(client => {
+        const option = document.createElement("option");
+        option.value = client.clientId;
+        option.textContent =
+            `${client.fullName} (ID: ${client.clientId})`;
+        accountClientSelect.appendChild(option);
+    });
+
+    if (clientsCache.some(
+        client => String(client.clientId) === selectedValue
+    )) {
+        accountClientSelect.value = selectedValue;
+    }
+}
+
+clientAccountForm?.addEventListener("submit", async event => {
+    event.preventDefault();
+
+    const clientId = Number(accountClientSelect.value);
+    const username =
+        document.getElementById("accountUsername").value.trim();
+    const password =
+        document.getElementById("accountPassword").value;
+
+    if (!clientId || !username || password.length < 12) {
+        clientAccountMessage.textContent =
+            "Select a client and enter a username and password of at least 12 characters.";
+        return;
+    }
+
+    createClientAccountButton.disabled = true;
+    clientAccountMessage.textContent = "Creating client login...";
+
+    try {
+        const result = await requestJSON("/api/client-accounts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ clientId, username, password })
+        });
+
+        clientAccountMessage.textContent =
+            result.message || "Client login created successfully.";
+
+        clientAccountForm.reset();
+        populateClientAccountDropdown();
+
+    } catch (error) {
+        clientAccountMessage.textContent = error.message;
+    } finally {
+        createClientAccountButton.disabled = false;
+    }
+});
+
+
+// STARTUP
+
+function startDashboard() {
+    // Load appointment choices independently of admin-only endpoints.
+    populateAppointmentDropdowns();
+    refreshDashboard();
+    populateDocumentCases();
+    loadDocuments();
+    loadNotifications();
+    loadBranches();
+    populateCaseDropdowns();
+    loadLegalCases();
+}
+
+// Must be last: all declarations above must initialize first.
+checkSession();

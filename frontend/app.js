@@ -193,7 +193,7 @@ let lawyersCache = [];
 
 function addCell(row, value) {
     const cell = document.createElement("td");
-    cell.textContent = value == null || value === "" ? "—" : value;
+    cell.textContent = value == null || value === "" ? "-" : value;
     row.appendChild(cell);
     return cell;
 }
@@ -384,7 +384,7 @@ function renderLawyers(lawyers) {
             lawyer.specialization,
             lawyer.experienceYears,
             lawyer.consultationFee
-        ].forEach(value => addCell(row, value ?? "—"));
+        ].forEach(value => addCell(row, value ?? "-"));
 
         const actions = document.createElement("td");
 
@@ -484,33 +484,76 @@ async function loadCases() {
     }
 }
 
-// APPOINTMENT DROPDOWNS
-function populateAppointmentDropdowns() {
+async function populateAppointmentDropdowns() {
     const clientSelect = $("appointmentClientId");
     const lawyerSelect = $("appointmentLawyerId");
+
     if (!clientSelect || !lawyerSelect) return;
 
     const selectedClient = clientSelect.value;
     const selectedLawyer = lawyerSelect.value;
 
     clientSelect.replaceChildren(new Option("Client Name", ""));
-    clientsCache.forEach(client => {
-        clientSelect.add(new Option(
-            `${client.fullName} (ID: ${client.clientId})`,
-            client.clientId
-        ));
-    });
+    lawyerSelect.replaceChildren(new Option("Loading lawyers...", ""));
 
-    lawyerSelect.replaceChildren(new Option("Lawyer Name", ""));
-    lawyersCache.forEach(lawyer => {
-        lawyerSelect.add(new Option(
-            `${lawyer.fullName} (ID: ${lawyer.lawyerId})`,
-            lawyer.lawyerId
-        ));
-    });
+    if (currentUser?.role === "CLIENT") {
+        // Use the authenticated client's ID, never a submitted ID.
+        if (currentUser.clientId != null) {
+            clientSelect.add(new Option(
+                currentUser.username,
+                currentUser.clientId
+            ));
+            clientSelect.value = String(currentUser.clientId);
+        }
 
-    if (selectedClient) clientSelect.value = selectedClient;
-    if (selectedLawyer) lawyerSelect.value = selectedLawyer;
+        clientSelect.disabled = true;
+    } else {
+        clientSelect.disabled = false;
+
+        clientsCache.forEach(client => {
+            clientSelect.add(new Option(
+                `${client.fullName} (ID: ${client.clientId})`,
+                client.clientId
+            ));
+        });
+
+        if (selectedClient) {
+            clientSelect.value = selectedClient;
+        }
+    }
+
+    try {
+        const response = await fetch("/api/lawyer-directory", {
+            credentials: "same-origin"
+        });
+
+        if (!response.ok) {
+            throw new Error("Unable to load lawyer directory");
+        }
+
+        const lawyers = await response.json(); if (currentUser?.role === "CLIENT") lawyersCache = Array.isArray(lawyers) ? lawyers : [];
+        if (currentUser?.role === "CLIENT") {
+            lawyersCache = Array.isArray(lawyers) ? lawyers : [];
+        }
+
+        lawyerSelect.replaceChildren(new Option("Lawyer Name", ""));
+
+        lawyers.forEach(lawyer => {
+            lawyerSelect.add(new Option(
+                `${lawyer.fullName} (ID: ${lawyer.lawyerId})`,
+                lawyer.lawyerId
+            ));
+        });
+
+        if (selectedLawyer) {
+            lawyerSelect.value = selectedLawyer;
+        }
+    } catch (error) {
+        console.error("Lawyer dropdown error:", error);
+        lawyerSelect.replaceChildren(
+            new Option("Unable to load lawyers", "")
+        );
+    }
 }
 
 // APPOINTMENTS
@@ -544,9 +587,15 @@ async function loadAppointments() {
             const lawyer = lawyersCache.find(
                 item => Number(item.lawyerId) === Number(appointment.lawyerId)
             );
-
-            addCell(row, client?.fullName || `Client #${appointment.clientId}`);
-            addCell(row, lawyer?.fullName || `Lawyer #${appointment.lawyerId}`);
+            const displayedClientName = client?.fullName ||
+                (currentUser?.role === "CLIENT" &&
+                 Number(currentUser.clientId) === Number(appointment.clientId)
+                    ? currentUser.username
+                    : `Client #${appointment.clientId}`);
+            const displayedLawyerName = lawyer?.fullName ||
+                `Lawyer #${appointment.lawyerId}`;
+            addCell(row, displayedClientName);
+            addCell(row, displayedLawyerName);
 
             addCell(row, formatDate(appointment.appointmentDate));
             addCell(row, formatTime(appointment.timeSlot));
@@ -607,7 +656,7 @@ async function loadAppointments() {
 }
 
 function formatDate(value) {
-    if (!value) return "—";
+    if (!value) return "-";
     const date = new Date(value);
     return Number.isNaN(date.getTime())
         ? String(value)
@@ -615,7 +664,7 @@ function formatDate(value) {
 }
 
 function formatTime(value) {
-    if (!value) return "—";
+    if (!value) return "-";
     const date = new Date(value);
     return Number.isNaN(date.getTime())
         ? String(value)
@@ -652,6 +701,7 @@ appointmentForm?.addEventListener("submit", async event => {
         });
 
         appointmentForm.reset();
+        await populateAppointmentDropdowns();
         appointmentMessage.textContent = "Appointment booked successfully.";
         await loadAppointments();
     } catch (error) {
@@ -782,7 +832,7 @@ async function populateDocumentCases() {
 
         cases.forEach(legalCase => {
             caseSelect.add(new Option(
-                `Case #${legalCase.caseId} — ${legalCase.category || "General"}`,
+                `Case #${legalCase.caseId} - ${legalCase.category || "General"}`,
                 legalCase.caseId
             ));
         });
@@ -909,7 +959,7 @@ async function loadNotifications() {
 
                 actionCell.appendChild(button);
             } else {
-                actionCell.textContent = "—";
+                actionCell.textContent = "-";
             }
 
             notificationTable.appendChild(row);
@@ -1003,7 +1053,7 @@ async function loadBranches() {
                 branch.activeCases,
                 branch.availableSlots,
                 `${Number(branch.capacityUtilization).toFixed(1)}%`
-            ].forEach(value => addCell(row, value ?? "—"));
+            ].forEach(value => addCell(row, value ?? "-"));
 
             const statusCell = addCell(
                 row,
@@ -1229,12 +1279,12 @@ async function loadLegalCases() {
             [
                 legalCase.caseId,
                 legalCase.clientId,
-                legalCase.leadPartnerId ?? "—",
+                legalCase.leadPartnerId ?? "-",
                 legalCase.category,
-                legalCase.budget ?? "—",
+                legalCase.budget ?? "-",
                 legalCase.status,
                 legalCase.complexity
-            ].forEach(value => addCell(row, value ?? "—"));
+            ].forEach(value => addCell(row, value ?? "-"));
 
             const actions = document.createElement("td");
 
@@ -1505,8 +1555,8 @@ recommendationForm?.addEventListener("submit", async event => {
                 : "Consider for review";
 
             [
-                lawyer.fullName ?? "—",
-                lawyer.specialization ?? "—",
+                lawyer.fullName ?? "-",
+                lawyer.specialization ?? "-",
                 `${lawyer.experienceYears ?? 0} years`,
                 lawyer.activeCases ?? 0,
                 lawyer.branchName ?? "Not assigned",
@@ -1608,6 +1658,8 @@ clientAccountForm?.addEventListener("submit", async event => {
 // STARTUP
 
 function startDashboard() {
+    // Load appointment choices independently of admin-only endpoints.
+    populateAppointmentDropdowns();
     refreshDashboard();
     populateDocumentCases();
     loadDocuments();
@@ -1619,3 +1671,4 @@ function startDashboard() {
 
 // Must be last: all declarations above must initialize first.
 checkSession();
+

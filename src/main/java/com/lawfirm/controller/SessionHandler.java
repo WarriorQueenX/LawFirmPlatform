@@ -35,7 +35,11 @@ public class SessionHandler implements HttpHandler {
 
                 String json = "{"
                         + "\"username\":\"" + escape(session.username) + "\","
-                        + "\"role\":\"" + escape(session.role) + "\""
+                        + "\"role\":\"" + escape(session.role) + "\","
+                        + "\"clientId\":" + (session.clientId == null
+                        ? "null" : session.clientId) + ","
+                        + "\"lawyerId\":" + (session.lawyerId == null
+                        ? "null" : session.lawyerId)
                         + "}";
 
                 send(exchange, 200, json);

@@ -38,6 +38,12 @@ public class Server {
         server.createContext("/api/auth/session", new SessionHandler());
         server.createContext("/api/client-accounts", new AuthGuard(new ClientAccountHandler(), "ADMIN"));
 
+        server.createContext(
+                "/api/lawyer-directory",
+                new AuthGuard(new LawyerDirectoryHandler(),
+                        "ADMIN", "BRANCH_MANAGER", "LAWYER", "CLIENT")
+        );
+
         Path frontendRoot = Path.of(
                 System.getProperty("user.dir"), "frontend"
         ).toAbsolutePath().normalize();

@@ -11,6 +11,8 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import com.lawfirm.util.SessionManager;
+import com.lawfirm.util.SessionManager.Session;
 
 public class AppointmentHandler implements HttpHandler {
 
@@ -24,9 +26,39 @@ public class AppointmentHandler implements HttpHandler {
                 return;
             }
 
+
             if ("GET".equalsIgnoreCase(method)) {
-                List<Map<String, Object>> appointments =
-                        AppointmentDAO.getAllAppointments();
+                Session session = getAuthenticatedSession(exchange);
+
+                if (session == null) {
+                    send(exchange, 401,
+                            "{\"error\":\"Authentication required\"}");
+                    return;
+                }
+
+                List<Map<String, Object>> appointments;
+
+                switch (session.role) {
+                    case "CLIENT" -> {
+                        int clientId = requireId(session.clientId,
+                                "Client account is not linked to a client record.");
+                        appointments =
+                                AppointmentDAO.getAppointmentsForClient(clientId);
+                    }
+                    case "LAWYER" -> {
+                        int lawyerId = requireId(session.lawyerId,
+                                "Lawyer account is not linked to a lawyer record.");
+                        appointments =
+                                AppointmentDAO.getAppointmentsForLawyer(lawyerId);
+                    }
+                    case "ADMIN", "BRANCH_MANAGER" ->
+                            appointments = AppointmentDAO.getAllAppointments();
+                    default -> {
+                        send(exchange, 403,
+                                "{\"error\":\"You cannot view appointments\"}");
+                        return;
+                    }
+                }
 
                 StringBuilder json = new StringBuilder("[");
                 for (int i = 0; i < appointments.size(); i++) {
@@ -39,13 +71,40 @@ public class AppointmentHandler implements HttpHandler {
                 return;
             }
 
+
             if ("POST".equalsIgnoreCase(method)) {
+                Session session = getAuthenticatedSession(exchange);
+
+                if (session == null) {
+                    send(exchange, 401,
+                            "{\"error\":\"Authentication required\"}");
+                    return;
+                }
+
+                if (!"CLIENT".equals(session.role)
+                        && !"ADMIN".equals(session.role)
+                        && !"BRANCH_MANAGER".equals(session.role)) {
+                    send(exchange, 403,
+                            "{\"error\":\"You cannot create appointments\"}");
+                    return;
+                }
+
                 Map<String, String> data = parseBody(exchange);
 
-                int clientId = Integer.parseInt(data.get("clientId"));
+                int clientId;
+
+                if ("CLIENT".equals(session.role)) {
+                    clientId = requireId(session.clientId,
+                            "Client account is not linked to a client record.");
+                } else {
+                    clientId = Integer.parseInt(data.get("clientId"));
+                }
+
                 int lawyerId = Integer.parseInt(data.get("lawyerId"));
+
                 LocalDateTime dateTime =
                         LocalDateTime.parse(data.get("appointmentDate"));
+
                 String mode = data.get("mode");
 
                 AppointmentDAO.createAppointment(
@@ -181,4 +240,31 @@ public class AppointmentHandler implements HttpHandler {
             output.write(bytes);
         }
     }
+
+    private Session getAuthenticatedSession(HttpExchange exchange) {
+        String cookieHeader = exchange.getRequestHeaders().getFirst("Cookie");
+
+        if (cookieHeader == null) {
+            return null;
+        }
+
+        for (String cookie : cookieHeader.split(";")) {
+            String[] parts = cookie.trim().split("=", 2);
+
+            if (parts.length == 2 && "LEXORA_SESSION".equals(parts[0])) {
+                return SessionManager.getSession(parts[1]);
+            }
+        }
+
+        return null;
+    }
+
+    private int requireId(Object id, String message) {
+        if (id == null) {
+            throw new IllegalArgumentException(message);
+        }
+
+        return Integer.parseInt(id.toString());
+    }
+
 }
