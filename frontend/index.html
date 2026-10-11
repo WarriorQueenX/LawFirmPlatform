@@ -7,6 +7,37 @@
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+<section id="loginScreen" class="login-screen" hidden>
+    <div class="login-card">
+        <div class="brand">LEXORA<span>.</span></div>
+        <p class="eyebrow">SECURE ACCESS</p>
+        <h1>Welcome back.</h1>
+        <p class="muted">Sign in to access your law firm workspace.</p>
+
+        <form id="loginForm">
+            <label for="loginUsername">Username</label>
+            <input
+                    id="loginUsername"
+                    name="username"
+                    type="text"
+                    autocomplete="username"
+                    required
+            >
+
+            <label for="loginPassword">Password</label>
+            <input
+                    id="loginPassword"
+                    name="password"
+                    type="password"
+                    autocomplete="current-password"
+                    required
+            >
+
+            <button id="loginButton" type="submit">Sign in</button>
+            <p id="loginMessage" role="status" aria-live="polite"></p>
+        </form>
+    </div>
+</section>
 <aside class="sidebar">
     <div class="brand">LEXORA<span>.</span></div>
     <p class="nav-label">WORKSPACE</p>
@@ -33,7 +64,13 @@
             <h1>Good morning.</h1>
             <p class="muted">Here's what's happening at your firm.</p>
         </div>
-        <div class="admin-badge"><span></span> Administrator</div>
+        <div class="account-controls">
+            <div class="admin-badge">
+                <span></span>
+                <span id="currentUserLabel">Not signed in</span>
+            </div>
+            <button id="logoutButton" type="button">Log out</button>
+        </div>
     </header>
 
     <!-- DASHBOARD STATISTICS -->

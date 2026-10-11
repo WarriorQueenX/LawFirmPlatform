@@ -1,12 +1,15 @@
 
 package com.lawfirm;
 
+import com.lawfirm.util.AuthGuard;
 import com.lawfirm.controller.AppointmentHandler;
 import com.lawfirm.controller.CaseHandler;
 import com.lawfirm.controller.ClientHandler;
+import com.lawfirm.controller.AuthHandler;
 import com.lawfirm.controller.LawyerHandler;
 import com.lawfirm.controller.RecommendationHandler;
 import com.sun.net.httpserver.HttpExchange;
+import com.lawfirm.controller.SessionHandler;
 import com.sun.net.httpserver.HttpServer;
 import com.lawfirm.controller.DocumentHandler;
 import java.io.IOException;
@@ -21,18 +24,26 @@ public class Server {
 
     public static void main(String[] args) throws IOException {
 
-        HttpServer server = HttpServer.create(
-                new InetSocketAddress(8082), 0
-        );
+        HttpServer server = HttpServer.create(new InetSocketAddress(8082), 0);
 
-        server.createContext("/api/clients", new ClientHandler());
-        server.createContext("/api/lawyers", new LawyerHandler());
-        server.createContext("/api/cases", new CaseHandler());
-        server.createContext("/api/appointments", new AppointmentHandler());
-        server.createContext("/api/documents", new DocumentHandler());
-        server.createContext("/api/notifications", new NotificationHandler());
-        server.createContext("/api/branches", new BranchHandler());
-        server.createContext("/api/recommendations", new RecommendationHandler());
+        server.createContext("/api/clients", new AuthGuard(new ClientHandler(), "ADMIN", "BRANCH_MANAGER"));
+
+        server.createContext("/api/lawyers", new AuthGuard(new LawyerHandler(), "ADMIN", "BRANCH_MANAGER"));
+
+        server.createContext("/api/cases", new AuthGuard(new CaseHandler(),"ADMIN", "BRANCH_MANAGER", "LAWYER"));
+
+        server.createContext("/api/appointments", new AuthGuard(new AppointmentHandler(), "ADMIN", "BRANCH_MANAGER", "LAWYER", "CLIENT"));
+
+        server.createContext("/api/documents", new AuthGuard(new DocumentHandler(),"ADMIN", "BRANCH_MANAGER", "LAWYER"));
+
+        server.createContext("/api/notifications", new AuthGuard(new NotificationHandler(), "ADMIN", "BRANCH_MANAGER", "LAWYER", "CLIENT"));
+
+        server.createContext("/api/branches", new AuthGuard(new BranchHandler(), "ADMIN", "BRANCH_MANAGER"));
+
+        server.createContext("/api/recommendations", new AuthGuard(new RecommendationHandler(),"ADMIN", "BRANCH_MANAGER", "LAWYER", "CLIENT"));
+
+        server.createContext("/api/auth/login", new AuthHandler());
+        server.createContext("/api/auth/session", new SessionHandler());
 
         Path frontendRoot = Path.of(
                 System.getProperty("user.dir"), "frontend"
@@ -54,6 +65,7 @@ public class Server {
         System.out.println("Notification API: http://localhost:8082/api/notifications");
         System.out.println("Branches API: http://localhost:8082/api/branches");
         System.out.println("Recommendations API: http://localhost:8082/api/recommendations");
+        System.out.println("Login API: http://localhost:8082/api/auth/login");
     }
 
     private static void serveFrontend(

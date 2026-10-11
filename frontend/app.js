@@ -1,4 +1,175 @@
 
+// LEXORA AUTHENTICATION
+
+const loginScreen = document.getElementById("loginScreen");
+const loginForm = document.getElementById("loginForm");
+const loginMessage = document.getElementById("loginMessage");
+const loginButton = document.getElementById("loginButton");
+const logoutButton = document.getElementById("logoutButton");
+const currentUserLabel = document.getElementById("currentUserLabel");
+
+let currentUser = null;
+let dashboardStarted = false;
+
+async function checkSession() {
+    try {
+        const response = await fetch("/api/auth/session", {
+            method: "GET",
+            credentials: "same-origin"
+        });
+
+        if (!response.ok) {
+            showLogin();
+            return;
+        }
+
+        currentUser = await response.json();
+        showDashboard();
+    } catch (error) {
+        showLogin();
+        loginMessage.textContent =
+            "Unable to connect to the server. Please try again.";
+    }
+}
+
+function showLogin() {
+    currentUser = null;
+    loginScreen.hidden = false;
+    document.querySelector(".sidebar").hidden = true;
+    document.querySelector(".main").hidden = true;
+}
+
+function showDashboard() {
+    loginScreen.hidden = true;
+    document.querySelector(".sidebar").hidden = false;
+    document.querySelector(".main").hidden = false;
+
+    if (currentUserLabel) {
+        currentUserLabel.textContent =
+            `${currentUser.username} (${currentUser.role})`;
+    }
+
+    if (!dashboardStarted) {
+        dashboardStarted = true;
+        startDashboard();
+    }
+
+    applyRoleVisibility();
+}
+
+loginForm?.addEventListener("submit", async event => {
+    event.preventDefault();
+
+    loginButton.disabled = true;
+    loginMessage.textContent = "Signing in...";
+
+    try {
+        const response = await fetch("/api/auth/login", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                username: document.getElementById("loginUsername").value.trim(),
+                password: document.getElementById("loginPassword").value
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || "Login failed.");
+        }
+
+        // Confirm the server recognizes the newly created session.
+        const sessionResponse = await fetch("/api/auth/session", {
+            credentials: "same-origin"
+        });
+
+        if (!sessionResponse.ok) {
+            throw new Error("Login succeeded, but session verification failed.");
+        }
+
+        currentUser = await sessionResponse.json();
+        loginForm.reset();
+        loginMessage.textContent = "";
+        showDashboard();
+
+    } catch (error) {
+        loginMessage.textContent = error.message;
+    } finally {
+        loginButton.disabled = false;
+    }
+});
+
+logoutButton?.addEventListener("click", async () => {
+    logoutButton.disabled = true;
+
+    try {
+        await fetch("/api/auth/session", {
+            method: "POST",
+            credentials: "same-origin"
+        });
+    } finally {
+        currentUser = null;
+        dashboardStarted = false;
+        logoutButton.disabled = false;
+        showLogin();
+        loginMessage.textContent = "You have been signed out.";
+    }
+});
+
+function applyRoleVisibility() {
+    if (!currentUser) return;
+
+    const role = currentUser.role;
+
+    // Initial navigation visibility only.
+    // Backend authorization remains mandatory.
+    const permissions = {
+        ADMIN: [
+            "clients", "lawyers", "appointments", "cases",
+            "branches", "documents", "notifications"
+        ],
+        BRANCH_MANAGER: [
+            "clients", "lawyers", "appointments", "cases",
+            "branches", "documents", "notifications"
+        ],
+        LAWYER: [
+            "appointments", "cases", "documents",
+            "notifications"
+        ],
+        CLIENT: [
+            "appointments", "cases", "notifications"
+        ]
+    };
+
+    const allowedSections = permissions[role] || [];
+
+    document.querySelectorAll(".sidebar .nav-item").forEach(link => {
+        const sectionId = link.getAttribute("href")?.slice(1);
+        link.hidden = !(
+            sectionId === "dashboard" ||
+            allowedSections.includes(sectionId)
+        );
+    });
+
+    document.querySelectorAll(".main > .panel, .main > .content-section")
+        .forEach(section => {
+            section.hidden = !(
+                section.id === "dashboard" ||
+                allowedSections.includes(section.id)
+            );
+        });
+
+    const stats = document.querySelector(".main > .stats");
+    if (stats) {
+        stats.hidden = role !== "ADMIN" &&
+            role !== "BRANCH_MANAGER";
+    }
+}
+
 const API_URL = "/api/clients";
 const LAWYER_API = "/api/lawyers";
 const CASE_API = "/api/cases";
@@ -517,8 +688,6 @@ async function refreshDashboard() {
     await loadAppointments();
 }
 
-refreshDashboard();
-
 const DOCUMENT_API = "/api/documents";
 
 const documentTable = document.getElementById("documentTable");
@@ -671,10 +840,6 @@ documentForm?.addEventListener("submit", async event => {
 
 refreshDocumentsButton?.addEventListener("click", loadDocuments);
 
-populateDocumentCases();
-loadDocuments();
-
-
 const NOTIFICATION_API = "/api/notifications";
 
 const notificationTable = document.getElementById("notificationTable");
@@ -808,8 +973,6 @@ notificationForm?.addEventListener("submit", async event => {
 document.getElementById("refreshNotificationsButton")
     ?.addEventListener("click", loadNotifications);
 
-loadNotifications();
-
 const BRANCH_API = "/api/branches";
 
 
@@ -880,8 +1043,6 @@ async function loadBranches() {
 document
     .getElementById("refreshBranchesButton")
     ?.addEventListener("click", loadBranches);
-
-loadBranches();
 
 const addLawyerForm = document.getElementById("addLawyerForm");
 
@@ -1444,4 +1605,17 @@ if (recommendationForm) {
         }
     });
 }
+
+function startDashboard() {
+    refreshDashboard();
+    populateDocumentCases();
+    loadDocuments();
+    loadNotifications();
+    loadBranches();
+    populateCaseDropdowns();
+    loadLegalCases();
+}
+
+checkSession();
+
 
