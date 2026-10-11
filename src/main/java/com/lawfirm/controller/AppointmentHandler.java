@@ -78,8 +78,16 @@ public class AppointmentHandler implements HttpHandler {
             send(exchange, 405, "{\"error\":\"Method not allowed\"}");
 
         } catch (IllegalArgumentException e) {
+            String message = e.getMessage() == null
+                    ? "Invalid appointment input"
+                    : e.getMessage();
+
+            String escaped = message
+                    .replace("\\", "\\\\")
+                    .replace("\"", "\\\"");
+
             send(exchange, 400,
-                    "{\"error\":\"Invalid appointment input\"}");
+                    "{\"error\":\"" + escaped + "\"}");
         } catch (Exception e) {
             e.printStackTrace();
             send(exchange, 500,

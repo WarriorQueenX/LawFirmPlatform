@@ -41,6 +41,7 @@ public class AppointmentDAO {
         return appointments;
     }
 
+
     public static void createAppointment(
             int clientId,
             int lawyerId,
@@ -53,26 +54,68 @@ public class AppointmentDAO {
                     "Mode must be Physical or Online.");
         }
 
-        String sql = """
-            INSERT INTO APPOINTMENT
-                (APPOINTMENT_ID, CLIENT_ID, LAWYER_ID,
-                 APPOINTMENT_DATE, TIME_SLOT, APPOINTMENT_MODE, STATUS)
-            VALUES
-                ((SELECT NVL(MAX(APPOINTMENT_ID), 0) + 1
-                  FROM APPOINTMENT),
-                 ?, ?, ?, ?, ?, 'Confirmed')
-            """;
+        String conflictSql = """
+        SELECT COUNT(*)
+        FROM APPOINTMENT
+        WHERE LAWYER_ID = ?
+          AND APPOINTMENT_DATE = ?
+          AND TIME_SLOT = ?
+          AND STATUS = 'Confirmed'
+        """;
 
-        try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        String insertSql = """
+        INSERT INTO APPOINTMENT
+            (APPOINTMENT_ID, CLIENT_ID, LAWYER_ID,
+             APPOINTMENT_DATE, TIME_SLOT, APPOINTMENT_MODE, STATUS)
+        VALUES
+            ((SELECT NVL(MAX(APPOINTMENT_ID), 0) + 1
+              FROM APPOINTMENT),
+             ?, ?, ?, ?, ?, 'Confirmed')
+        """;
 
-            stmt.setInt(1, clientId);
-            stmt.setInt(2, lawyerId);
-            stmt.setTimestamp(3, appointmentDate);
-            stmt.setTimestamp(4, timeSlot);
-            stmt.setString(5, mode);
+        try (Connection conn = DBConnection.getConnection()) {
+            conn.setAutoCommit(false);
 
-            stmt.executeUpdate();
+            try {
+                // Check whether this lawyer already has a confirmed
+                // appointment for the requested date and time.
+                try (PreparedStatement check =
+                             conn.prepareStatement(conflictSql)) {
+
+                    check.setInt(1, lawyerId);
+                    check.setTimestamp(2, appointmentDate);
+                    check.setTimestamp(3, timeSlot);
+
+                    try (ResultSet rs = check.executeQuery()) {
+                        if (rs.next() && rs.getInt(1) > 0) {
+                            throw new IllegalArgumentException(
+                                    "This lawyer already has a confirmed " +
+                                            "appointment at the selected date and time.");
+                        }
+                    }
+                }
+
+                // Insert only when no conflict exists.
+                try (PreparedStatement stmt =
+                             conn.prepareStatement(insertSql)) {
+
+                    stmt.setInt(1, clientId);
+                    stmt.setInt(2, lawyerId);
+                    stmt.setTimestamp(3, appointmentDate);
+                    stmt.setTimestamp(4, timeSlot);
+                    stmt.setString(5, mode);
+
+                    stmt.executeUpdate();
+                }
+
+                conn.commit();
+
+            } catch (SQLException | RuntimeException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
         }
     }
 
