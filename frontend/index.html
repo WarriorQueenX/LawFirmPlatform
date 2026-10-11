@@ -339,6 +339,57 @@
                 </table>
             </div>
         </div>
+
+        <div class="card recommendation-card">
+            <h3>Recommended Lawyers</h3>
+            <p>
+                Find suitable lawyers based on specialization,
+                experience, workload, and branch capacity.
+            </p>
+
+            <form id="recommendationForm">
+                <label for="recommendationCategory">
+                    Case Category
+                </label>
+
+                <input
+                        type="text"
+                        id="recommendationCategory"
+                        placeholder="e.g. Contract"
+                        required
+                />
+
+                <button type="submit">
+                    Find Recommended Lawyers
+                </button>
+            </form>
+
+            <p id="recommendationMessage"></p>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Lawyer</th>
+                        <th>Specialization</th>
+                        <th>Experience</th>
+                        <th>Active Cases</th>
+                        <th>Branch</th>
+                        <th>Score</th>
+                        <th>Reasons</th>
+                    </tr>
+                    </thead>
+                    <tbody id="recommendationTable">
+                    <tr>
+                        <td colspan="7">
+                            Enter a case category to find recommendations.
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
     </section>
 
 

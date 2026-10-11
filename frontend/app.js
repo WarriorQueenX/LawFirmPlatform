@@ -1363,3 +1363,85 @@ if (caseForm) {
     loadLegalCases();
 }
 
+const RECOMMENDATION_API = "/api/recommendations";
+
+const recommendationForm =
+    document.getElementById("recommendationForm");
+
+if (recommendationForm) {
+    recommendationForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const category = document
+            .getElementById("recommendationCategory")
+            .value.trim();
+
+        const table = document.getElementById("recommendationTable");
+        const message =
+            document.getElementById("recommendationMessage");
+
+        if (!category) return;
+
+        table.replaceChildren();
+        table.innerHTML =
+            '<tr><td colspan="7">Loading recommendations...</td></tr>';
+        message.textContent = "";
+
+        try {
+            const url =
+                `${RECOMMENDATION_API}?category=${encodeURIComponent(category)}`;
+
+            const lawyers = await requestJSON(url);
+
+            table.replaceChildren();
+
+            if (!Array.isArray(lawyers) || lawyers.length === 0) {
+                table.innerHTML =
+                    '<tr><td colspan="7">No lawyers found.</td></tr>';
+                message.textContent =
+                    "Try another case category.";
+                return;
+            }
+
+            lawyers.forEach((lawyer) => {
+                const row = document.createElement("tr");
+
+                const reasons = Array.isArray(lawyer.reasons)
+                    ? lawyer.reasons.join(", ")
+                    : "Consider for review";
+
+                const values = [
+                    lawyer.fullName ?? "—",
+                    lawyer.specialization ?? "—",
+                    `${lawyer.experienceYears ?? 0} years`,
+                    lawyer.activeCases ?? 0,
+                    lawyer.branchName ?? "Not assigned",
+                    lawyer.recommendationScore ?? 0,
+                    reasons
+                ];
+
+                values.forEach((value) => {
+                    const cell = document.createElement("td");
+                    cell.textContent = String(value);
+                    row.appendChild(cell);
+                });
+
+                table.appendChild(row);
+            });
+
+            message.textContent =
+                `${lawyers.length} lawyer(s) returned. ` +
+                "Recommendations are advisory; final assignment requires review.";
+
+        } catch (error) {
+            console.error("Recommendation error:", error);
+
+            table.innerHTML =
+                '<tr><td colspan="7">Unable to load recommendations.</td></tr>';
+
+            message.textContent =
+                "Check the server console and try again.";
+        }
+    });
+}
+

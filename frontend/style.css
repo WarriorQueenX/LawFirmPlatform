@@ -690,3 +690,31 @@ tbody tr:hover {
     color: #b42318;
 }
 
+.recommendation-card {
+    margin-top: 24px;
+    padding: 24px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+}
+
+#recommendationForm {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 18px 0;
+}
+
+#recommendationCategory {
+    min-width: 220px;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+}
+
+#recommendationMessage {
+    margin: 12px 0;
+    color: #4b5563;
+}
+

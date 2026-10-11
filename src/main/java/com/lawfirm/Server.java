@@ -5,6 +5,7 @@ import com.lawfirm.controller.AppointmentHandler;
 import com.lawfirm.controller.CaseHandler;
 import com.lawfirm.controller.ClientHandler;
 import com.lawfirm.controller.LawyerHandler;
+import com.lawfirm.controller.RecommendationHandler;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import com.lawfirm.controller.DocumentHandler;
@@ -31,7 +32,7 @@ public class Server {
         server.createContext("/api/documents", new DocumentHandler());
         server.createContext("/api/notifications", new NotificationHandler());
         server.createContext("/api/branches", new BranchHandler());
-
+        server.createContext("/api/recommendations", new RecommendationHandler());
 
         Path frontendRoot = Path.of(
                 System.getProperty("user.dir"), "frontend"
@@ -52,6 +53,7 @@ public class Server {
         System.out.println("Documents API: http://localhost:8082/api/documents");
         System.out.println("Notification API: http://localhost:8082/api/notifications");
         System.out.println("Branches API: http://localhost:8082/api/branches");
+        System.out.println("Recommendations API: http://localhost:8082/api/recommendations");
     }
 
     private static void serveFrontend(
