@@ -1,24 +1,16 @@
 
 package com.lawfirm;
 
+import com.lawfirm.controller.*;
 import com.lawfirm.util.AuthGuard;
-import com.lawfirm.controller.AppointmentHandler;
-import com.lawfirm.controller.CaseHandler;
-import com.lawfirm.controller.ClientHandler;
-import com.lawfirm.controller.AuthHandler;
-import com.lawfirm.controller.LawyerHandler;
-import com.lawfirm.controller.RecommendationHandler;
 import com.sun.net.httpserver.HttpExchange;
-import com.lawfirm.controller.SessionHandler;
 import com.sun.net.httpserver.HttpServer;
-import com.lawfirm.controller.DocumentHandler;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import com.lawfirm.controller.NotificationHandler;
-import com.lawfirm.controller.BranchHandler;
 
 public class Server {
 
@@ -44,6 +36,7 @@ public class Server {
 
         server.createContext("/api/auth/login", new AuthHandler());
         server.createContext("/api/auth/session", new SessionHandler());
+        server.createContext("/api/client-accounts", new AuthGuard(new ClientAccountHandler(), "ADMIN"));
 
         Path frontendRoot = Path.of(
                 System.getProperty("user.dir"), "frontend"
