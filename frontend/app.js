@@ -1,4 +1,3 @@
-
 // LEXORA AUTHENTICATION
 
 const loginScreen = document.getElementById("loginScreen");
@@ -82,7 +81,6 @@ loginForm?.addEventListener("submit", async event => {
             throw new Error(data.error || "Login failed.");
         }
 
-        // Confirm the server recognizes the newly created session.
         const sessionResponse = await fetch("/api/auth/session", {
             credentials: "same-origin"
         });
@@ -125,8 +123,6 @@ function applyRoleVisibility() {
 
     const role = currentUser.role;
 
-    // Initial navigation visibility only.
-    // Backend authorization remains mandatory.
     const permissions = {
         ADMIN: [
             "clients", "lawyers", "appointments", "cases",
@@ -137,8 +133,7 @@ function applyRoleVisibility() {
             "branches", "documents", "notifications"
         ],
         LAWYER: [
-            "appointments", "cases", "documents",
-            "notifications"
+            "appointments", "cases", "documents", "notifications"
         ],
         CLIENT: [
             "appointments", "cases", "notifications"
@@ -217,10 +212,11 @@ async function requestJSON(url, options = {}) {
     if (!response.ok) {
         throw new Error(data?.error || `Request failed (${response.status})`);
     }
+
     return data;
 }
 
-// CLIENT CRUD: preserved
+// CLIENT CRUD
 async function loadClients() {
     refreshButton.disabled = true;
 
@@ -230,10 +226,6 @@ async function loadClients() {
 
         clientTable.replaceChildren();
         clientCount.textContent = clientsCache.length;
-
-        if ($("appointmentCount")) {
-            // Updated when appointments load.
-        }
 
         if (!clientsCache.length) {
             clientTable.innerHTML =
@@ -272,6 +264,7 @@ async function loadClients() {
                             email: email.trim()
                         })
                     });
+
                     message.textContent = "Client updated successfully.";
                     await loadClients();
                     await loadAppointments();
@@ -291,6 +284,7 @@ async function loadClients() {
                     await requestJSON(`${API_URL}?id=${client.clientId}`, {
                         method: "DELETE"
                     });
+
                     message.textContent = "Client deleted successfully.";
                     await loadClients();
                     await loadAppointments();
@@ -305,6 +299,8 @@ async function loadClients() {
 
         message.textContent = "Client records loaded successfully.";
         populateAppointmentDropdowns();
+        populateClientAccountDropdown();
+
     } catch (error) {
         message.textContent = "Unable to load clients: " + error.message;
         console.error("Client loading failed:", error);
@@ -360,7 +356,6 @@ async function loadLawyers() {
         console.error("Lawyer loading error:", error);
     }
 }
-
 
 function renderLawyers(lawyers) {
     const table = document.getElementById("lawyerTable");
@@ -465,7 +460,6 @@ document.getElementById("clearLawyerFilters")
         renderLawyers(lawyersCache);
     });
 
-
 // LEGAL CASES
 
 async function loadCases() {
@@ -490,8 +484,7 @@ async function loadCases() {
     }
 }
 
-
-// APPOINTMENT DROPDOWNS: show names, submit IDs
+// APPOINTMENT DROPDOWNS
 function populateAppointmentDropdowns() {
     const clientSelect = $("appointmentClientId");
     const lawyerSelect = $("appointmentLawyerId");
@@ -555,11 +548,8 @@ async function loadAppointments() {
             addCell(row, client?.fullName || `Client #${appointment.clientId}`);
             addCell(row, lawyer?.fullName || `Lawyer #${appointment.lawyerId}`);
 
-            const date = appointment.appointmentDate;
-            const time = appointment.timeSlot;
-
-            addCell(row, formatDate(date));
-            addCell(row, formatTime(time));
+            addCell(row, formatDate(appointment.appointmentDate));
+            addCell(row, formatTime(appointment.timeSlot));
             addCell(row, appointment.mode);
             addCell(row, appointment.status);
 
@@ -665,8 +655,7 @@ appointmentForm?.addEventListener("submit", async event => {
         appointmentMessage.textContent = "Appointment booked successfully.";
         await loadAppointments();
     } catch (error) {
-        appointmentMessage.textContent =
-            "Booking failed: " + error.message;
+        appointmentMessage.textContent = "Booking failed: " + error.message;
     }
 });
 
@@ -687,6 +676,8 @@ async function refreshDashboard() {
     ]);
     await loadAppointments();
 }
+
+// DOCUMENTS
 
 const DOCUMENT_API = "/api/documents";
 
@@ -840,6 +831,9 @@ documentForm?.addEventListener("submit", async event => {
 
 refreshDocumentsButton?.addEventListener("click", loadDocuments);
 
+
+// NOTIFICATIONS
+
 const NOTIFICATION_API = "/api/notifications";
 
 const notificationTable = document.getElementById("notificationTable");
@@ -939,7 +933,7 @@ notificationForm?.addEventListener("submit", async event => {
         document.getElementById("notificationRecipientId").value;
     const recipientType =
         document.getElementById("notificationRecipientType").value;
-    const message =
+    const messageText =
         document.getElementById("notificationText").value.trim();
 
     try {
@@ -949,7 +943,7 @@ notificationForm?.addEventListener("submit", async event => {
             body: JSON.stringify({
                 recipientId: Number(recipientId),
                 recipientType,
-                message
+                message: messageText
             })
         });
 
@@ -972,13 +966,13 @@ notificationForm?.addEventListener("submit", async event => {
 
 document.getElementById("refreshNotificationsButton")
     ?.addEventListener("click", loadNotifications);
+// BRANCH WORKLOAD
 
 const BRANCH_API = "/api/branches";
 
-
 async function loadBranches() {
     const table = document.getElementById("branchTable");
-    const message = document.getElementById("branchMessage");
+    const branchMessage = document.getElementById("branchMessage");
 
     if (!table) return;
 
@@ -993,7 +987,7 @@ async function loadBranches() {
             table.innerHTML =
                 '<tr><td colspan="9">No branch records found.</td></tr>';
 
-            if (message) message.textContent = "";
+            if (branchMessage) branchMessage.textContent = "";
             return;
         }
 
@@ -1011,7 +1005,10 @@ async function loadBranches() {
                 `${Number(branch.capacityUtilization).toFixed(1)}%`
             ].forEach(value => addCell(row, value ?? "—"));
 
-            const statusCell = addCell(row, branch.workloadStatus ?? "Unknown");
+            const statusCell = addCell(
+                row,
+                branch.workloadStatus ?? "Unknown"
+            );
             statusCell.className = "workload-status";
 
             if (branch.workloadStatus === "At Capacity") {
@@ -1025,31 +1022,31 @@ async function loadBranches() {
             table.appendChild(row);
         });
 
-        if (message) {
-            message.textContent =
+        if (branchMessage) {
+            branchMessage.textContent =
                 `Loaded workload for ${branches.length} branches.`;
         }
     } catch (error) {
         table.innerHTML =
             '<tr><td colspan="9">Unable to load branch workload.</td></tr>';
 
-        if (message) message.textContent = error.message;
-
+        if (branchMessage) branchMessage.textContent = error.message;
         console.error("Branch workload error:", error);
     }
 }
 
-
-document
-    .getElementById("refreshBranchesButton")
+document.getElementById("refreshBranchesButton")
     ?.addEventListener("click", loadBranches);
+
+
+// ADD LAWYER
 
 const addLawyerForm = document.getElementById("addLawyerForm");
 
-addLawyerForm?.addEventListener("submit", async function (event) {
+addLawyerForm?.addEventListener("submit", async event => {
     event.preventDefault();
 
-    const message = document.getElementById("addLawyerMessage");
+    const messageElement = document.getElementById("addLawyerMessage");
     const submitButton = addLawyerForm.querySelector(
         'button[type="submit"]'
     );
@@ -1083,42 +1080,25 @@ addLawyerForm?.addEventListener("submit", async function (event) {
         !Number.isFinite(lawyer.consultationFee) ||
         lawyer.consultationFee < 0
     ) {
-        message.textContent = "Please enter valid lawyer details.";
+        messageElement.textContent = "Please enter valid lawyer details.";
         return;
     }
 
     submitButton.disabled = true;
-    message.textContent = "Adding lawyer...";
+    messageElement.textContent = "Adding lawyer...";
 
     try {
-        const response = await fetch(LAWYER_API, {
+        await requestJSON(LAWYER_API, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(lawyer)
         });
 
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(
-                result.error || "Unable to add lawyer."
-            );
-        }
-
-        message.textContent = "Lawyer added successfully.";
+        messageElement.textContent = "Lawyer added successfully.";
         addLawyerForm.reset();
-
         await loadLawyers();
-
-        // Refresh appointment dropdowns if the existing helper is available.
-        if (typeof populateAppointmentDropdowns === "function") {
-            populateAppointmentDropdowns();
-        }
-
     } catch (error) {
-        message.textContent = error.message;
+        messageElement.textContent = error.message;
         console.error("Add lawyer error:", error);
     } finally {
         submitButton.disabled = false;
@@ -1130,20 +1110,17 @@ async function editLawyer(lawyer) {
     if (fullName === null) return;
 
     const specialization = prompt(
-        "Specialization:",
-        lawyer.specialization
+        "Specialization:", lawyer.specialization
     );
     if (specialization === null) return;
 
     const experienceYears = prompt(
-        "Years of experience:",
-        lawyer.experienceYears
+        "Years of experience:", lawyer.experienceYears
     );
     if (experienceYears === null) return;
 
     const consultationFee = prompt(
-        "Consultation fee:",
-        lawyer.consultationFee
+        "Consultation fee:", lawyer.consultationFee
     );
     if (consultationFee === null) return;
 
@@ -1188,19 +1165,11 @@ async function editLawyer(lawyer) {
     }
 
     try {
-        const response = await fetch("/api/lawyers", {
+        await requestJSON(LAWYER_API, {
             method: "PUT",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.error || "Could not update lawyer.");
-        }
 
         alert("Lawyer updated successfully.");
         await loadLawyers();
@@ -1210,39 +1179,31 @@ async function editLawyer(lawyer) {
 }
 
 async function deleteLawyer(lawyer) {
-    const confirmed = confirm(
+    if (!confirm(
         `Delete lawyer "${lawyer.fullName}" (ID: ${lawyer.lawyerId})?`
-    );
-
-    if (!confirmed) return;
+    )) return;
 
     try {
-        const response = await fetch("/api/lawyers", {
+        await requestJSON(LAWYER_API, {
             method: "DELETE",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 lawyerId: Number(lawyer.lawyerId)
             })
         });
 
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.error || "Could not delete lawyer.");
-        }
-
         alert("Lawyer deleted successfully.");
         await loadLawyers();
     } catch (error) {
         alert(
-            "Delete failed. The lawyer may be linked to existing cases or appointments.\n" +
+            "Delete failed. The lawyer may be linked to existing records.\n" +
             error.message
         );
     }
 }
 
+
+// LEGAL CASE MANAGEMENT
 
 const LEGAL_CASE_API = "/api/cases";
 
@@ -1253,14 +1214,10 @@ async function loadLegalCases() {
     table.innerHTML = '<tr><td colspan="8">Loading cases...</td></tr>';
 
     try {
-        const response = await fetch(LEGAL_CASE_API);
-        if (!response.ok) throw new Error("Unable to load legal cases");
+        const cases = await requestJSON(LEGAL_CASE_API);
+        table.replaceChildren();
 
-        const cases = await response.json();
-
-        table.innerHTML = "";
-
-        if (cases.length === 0) {
+        if (!cases.length) {
             table.innerHTML =
                 '<tr><td colspan="8">No legal cases found.</td></tr>';
             return;
@@ -1297,7 +1254,11 @@ async function loadLegalCases() {
                 () => deleteLegalCase(legalCase.caseId)
             );
 
-            actions.append(editButton, document.createTextNode(" "), deleteButton);
+            actions.append(
+                editButton,
+                document.createTextNode(" "),
+                deleteButton
+            );
             row.appendChild(actions);
             table.appendChild(row);
         });
@@ -1316,8 +1277,8 @@ async function populateCaseDropdowns() {
 
     try {
         const [clientsResponse, lawyersResponse] = await Promise.all([
-            fetch("/api/clients"),
-            fetch("/api/lawyers")
+            fetch(API_URL),
+            fetch(LAWYER_API)
         ]);
 
         if (!clientsResponse.ok || !lawyersResponse.ok) {
@@ -1327,9 +1288,7 @@ async function populateCaseDropdowns() {
         const clients = await clientsResponse.json();
         const lawyers = await lawyersResponse.json();
 
-        clientSelect.replaceChildren(
-            new Option("Select client", "")
-        );
+        clientSelect.replaceChildren(new Option("Select client", ""));
 
         clients.forEach(client => {
             clientSelect.add(
@@ -1348,7 +1307,6 @@ async function populateCaseDropdowns() {
         });
     } catch (error) {
         console.error("Case dropdown error:", error);
-        alert("Could not load clients and lawyers for the case form.");
     }
 }
 
@@ -1391,31 +1349,20 @@ async function submitLegalCase(event) {
     };
 
     try {
-        const response = await fetch(LEGAL_CASE_API, {
+        await requestJSON(LEGAL_CASE_API, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
 
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.error || "Unable to create case");
-        }
-
         alert("Legal case created successfully.");
         document.getElementById("caseForm").reset();
-        await loadCases();
+
         await loadLegalCases();
+        await refreshDashboard();
     } catch (error) {
         alert("Create case failed: " + error.message);
     }
-    alert("Legal case created successfully.");
-    document.getElementById("caseForm").reset();
-
-    await loadLegalCases();
-    await loadCases();
-    await loadAppointments();
 }
 
 async function editLegalCase(legalCase) {
@@ -1467,17 +1414,11 @@ async function editLegalCase(legalCase) {
     };
 
     try {
-        const response = await fetch(LEGAL_CASE_API, {
+        await requestJSON(LEGAL_CASE_API, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.error || "Unable to update case");
-        }
 
         alert("Legal case updated successfully.");
         await loadLegalCases();
@@ -1488,22 +1429,16 @@ async function editLegalCase(legalCase) {
 }
 
 async function deleteLegalCase(caseId) {
-    if (!confirm(`Delete legal case ${caseId}? This cannot be undone.`)) {
-        return;
-    }
+    if (!confirm(
+        `Delete legal case ${caseId}? This cannot be undone.`
+    )) return;
 
     try {
-        const response = await fetch(LEGAL_CASE_API, {
+        await requestJSON(LEGAL_CASE_API, {
             method: "DELETE",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ caseId: Number(caseId) })
         });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.error || "Unable to delete case");
-        }
 
         alert("Legal case deleted successfully.");
         await loadLegalCases();
@@ -1520,91 +1455,157 @@ const caseForm = document.getElementById("caseForm");
 
 if (caseForm) {
     caseForm.addEventListener("submit", submitLegalCase);
-    populateCaseDropdowns();
-    loadLegalCases();
 }
 
-const RECOMMENDATION_API = "/api/recommendations";
 
+// LAWYER RECOMMENDATIONS
+
+const RECOMMENDATION_API = "/api/recommendations";
 const recommendationForm =
     document.getElementById("recommendationForm");
 
-if (recommendationForm) {
-    recommendationForm.addEventListener("submit", async (event) => {
-        event.preventDefault();
+recommendationForm?.addEventListener("submit", async event => {
+    event.preventDefault();
 
-        const category = document
-            .getElementById("recommendationCategory")
-            .value.trim();
+    const category = document
+        .getElementById("recommendationCategory")
+        .value.trim();
 
-        const table = document.getElementById("recommendationTable");
-        const message =
-            document.getElementById("recommendationMessage");
+    const table = document.getElementById("recommendationTable");
+    const recommendationMessage =
+        document.getElementById("recommendationMessage");
 
-        if (!category) return;
+    if (!category) return;
 
+    table.replaceChildren();
+    table.innerHTML =
+        '<tr><td colspan="7">Loading recommendations...</td></tr>';
+    recommendationMessage.textContent = "";
+
+    try {
+        const url =
+            `${RECOMMENDATION_API}?category=${encodeURIComponent(category)}`;
+
+        const lawyers = await requestJSON(url);
         table.replaceChildren();
-        table.innerHTML =
-            '<tr><td colspan="7">Loading recommendations...</td></tr>';
-        message.textContent = "";
 
-        try {
-            const url =
-                `${RECOMMENDATION_API}?category=${encodeURIComponent(category)}`;
-
-            const lawyers = await requestJSON(url);
-
-            table.replaceChildren();
-
-            if (!Array.isArray(lawyers) || lawyers.length === 0) {
-                table.innerHTML =
-                    '<tr><td colspan="7">No lawyers found.</td></tr>';
-                message.textContent =
-                    "Try another case category.";
-                return;
-            }
-
-            lawyers.forEach((lawyer) => {
-                const row = document.createElement("tr");
-
-                const reasons = Array.isArray(lawyer.reasons)
-                    ? lawyer.reasons.join(", ")
-                    : "Consider for review";
-
-                const values = [
-                    lawyer.fullName ?? "—",
-                    lawyer.specialization ?? "—",
-                    `${lawyer.experienceYears ?? 0} years`,
-                    lawyer.activeCases ?? 0,
-                    lawyer.branchName ?? "Not assigned",
-                    lawyer.recommendationScore ?? 0,
-                    reasons
-                ];
-
-                values.forEach((value) => {
-                    const cell = document.createElement("td");
-                    cell.textContent = String(value);
-                    row.appendChild(cell);
-                });
-
-                table.appendChild(row);
-            });
-
-            message.textContent =
-                `${lawyers.length} lawyer(s) returned. ` +
-                "Recommendations are advisory; final assignment requires review.";
-
-        } catch (error) {
-            console.error("Recommendation error:", error);
-
+        if (!Array.isArray(lawyers) || lawyers.length === 0) {
             table.innerHTML =
-                '<tr><td colspan="7">Unable to load recommendations.</td></tr>';
-
-            message.textContent =
-                "Check the server console and try again.";
+                '<tr><td colspan="7">No lawyers found.</td></tr>';
+            recommendationMessage.textContent =
+                "Try another case category.";
+            return;
         }
+
+        lawyers.forEach(lawyer => {
+            const row = document.createElement("tr");
+
+            const reasons = Array.isArray(lawyer.reasons)
+                ? lawyer.reasons.join(", ")
+                : "Consider for review";
+
+            [
+                lawyer.fullName ?? "—",
+                lawyer.specialization ?? "—",
+                `${lawyer.experienceYears ?? 0} years`,
+                lawyer.activeCases ?? 0,
+                lawyer.branchName ?? "Not assigned",
+                lawyer.recommendationScore ?? 0,
+                reasons
+            ].forEach(value => addCell(row, String(value)));
+
+            table.appendChild(row);
+        });
+
+        recommendationMessage.textContent =
+            `${lawyers.length} lawyer(s) returned. ` +
+            "Recommendations are advisory; final assignment requires review.";
+
+    } catch (error) {
+        console.error("Recommendation error:", error);
+        table.innerHTML =
+            '<tr><td colspan="7">Unable to load recommendations.</td></tr>';
+        recommendationMessage.textContent =
+            "Check the server console and try again.";
+    }
+});
+
+
+// CLIENT ACCOUNT CREATION
+
+const clientAccountForm = document.getElementById("clientAccountForm");
+const accountClientSelect = document.getElementById("accountClientId");
+const clientAccountMessage =
+    document.getElementById("clientAccountMessage");
+const createClientAccountButton =
+    document.getElementById("createClientAccountButton");
+
+function populateClientAccountDropdown() {
+    if (!accountClientSelect) return;
+
+    const selectedValue = accountClientSelect.value;
+    accountClientSelect.replaceChildren();
+
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Select existing client";
+    accountClientSelect.appendChild(placeholder);
+
+    clientsCache.forEach(client => {
+        const option = document.createElement("option");
+        option.value = client.clientId;
+        option.textContent =
+            `${client.fullName} (ID: ${client.clientId})`;
+        accountClientSelect.appendChild(option);
     });
+
+    if (clientsCache.some(
+        client => String(client.clientId) === selectedValue
+    )) {
+        accountClientSelect.value = selectedValue;
+    }
 }
+
+clientAccountForm?.addEventListener("submit", async event => {
+    event.preventDefault();
+
+    const clientId = Number(accountClientSelect.value);
+    const username =
+        document.getElementById("accountUsername").value.trim();
+    const password =
+        document.getElementById("accountPassword").value;
+
+    if (!clientId || !username || password.length < 12) {
+        clientAccountMessage.textContent =
+            "Select a client and enter a username and password of at least 12 characters.";
+        return;
+    }
+
+    createClientAccountButton.disabled = true;
+    clientAccountMessage.textContent = "Creating client login...";
+
+    try {
+        const result = await requestJSON("/api/client-accounts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ clientId, username, password })
+        });
+
+        clientAccountMessage.textContent =
+            result.message || "Client login created successfully.";
+
+        clientAccountForm.reset();
+        populateClientAccountDropdown();
+
+    } catch (error) {
+        clientAccountMessage.textContent = error.message;
+    } finally {
+        createClientAccountButton.disabled = false;
+    }
+});
+
+
+// STARTUP
 
 function startDashboard() {
     refreshDashboard();
@@ -1616,6 +1617,5 @@ function startDashboard() {
     loadLegalCases();
 }
 
+// Must be last: all declarations above must initialize first.
 checkSession();
-
-

@@ -113,6 +113,44 @@
             <input id="email" type="email" placeholder="Email address" required>
             <button type="submit">Add Client +</button>
         </form>
+
+        <div class="account-creation">
+            <h3>Create Client Login</h3>
+            <p class="muted">Create login credentials for an existing client.</p>
+
+            <div id="clientAccountMessage" class="message" role="status">
+                Select a client to create an account.
+            </div>
+
+            <form id="clientAccountForm" class="client-form">
+                <select id="accountClientId" required>
+                    <option value="">Select existing client</option>
+                </select>
+
+                <input
+                        id="accountUsername"
+                        type="text"
+                        placeholder="Login username"
+                        maxlength="100"
+                        autocomplete="off"
+                        required
+                >
+
+                <input
+                        id="accountPassword"
+                        type="password"
+                        placeholder="Temporary password (12+ characters)"
+                        minlength="12"
+                        autocomplete="new-password"
+                        required
+                >
+
+                <button id="createClientAccountButton" type="submit">
+                    Create Client Login
+                </button>
+            </form>
+        </div>
+
         <div class="table-wrap">
             <table>
                 <thead>
