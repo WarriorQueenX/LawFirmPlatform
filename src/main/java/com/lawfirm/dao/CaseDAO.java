@@ -1,4 +1,3 @@
-
 package com.lawfirm.dao;
 
 import com.lawfirm.util.DBConnection;
@@ -8,6 +7,23 @@ import java.sql.*;
 import java.util.*;
 
 public class CaseDAO {
+
+    private static Map<String, Object> mapCase(ResultSet rs)
+            throws SQLException {
+
+        Map<String, Object> legalCase = new LinkedHashMap<>();
+
+        legalCase.put("caseId", rs.getInt("CASE_ID"));
+        legalCase.put("clientId", rs.getInt("CLIENT_ID"));
+        legalCase.put("leadPartnerId",
+                rs.getObject("LEAD_PARTNER_ID"));
+        legalCase.put("category", rs.getString("CATEGORY"));
+        legalCase.put("budget", rs.getBigDecimal("BUDGET"));
+        legalCase.put("status", rs.getString("STATUS"));
+        legalCase.put("complexity", rs.getString("COMPLEXITY"));
+
+        return legalCase;
+    }
 
     public static List<Map<String, Object>> getAllCases()
             throws SQLException {
@@ -26,19 +42,35 @@ public class CaseDAO {
              ResultSet rs = stmt.executeQuery()) {
 
             while (rs.next()) {
-                Map<String, Object> legalCase = new LinkedHashMap<>();
+                cases.add(mapCase(rs));
+            }
+        }
 
-                legalCase.put("caseId", rs.getInt("CASE_ID"));
-                legalCase.put("clientId", rs.getInt("CLIENT_ID"));
-                legalCase.put("leadPartnerId",
-                        rs.getObject("LEAD_PARTNER_ID"));
-                legalCase.put("category", rs.getString("CATEGORY"));
-                legalCase.put("budget", rs.getBigDecimal("BUDGET"));
-                legalCase.put("status", rs.getString("STATUS"));
-                legalCase.put("complexity",
-                        rs.getString("COMPLEXITY"));
+        return cases;
+    }
 
-                cases.add(legalCase);
+    public static List<Map<String, Object>> getCasesByLawyer(
+            int lawyerId) throws SQLException {
+
+        List<Map<String, Object>> cases = new ArrayList<>();
+
+        String sql = """
+            SELECT CASE_ID, CLIENT_ID, LEAD_PARTNER_ID,
+                   CATEGORY, BUDGET, STATUS, COMPLEXITY
+            FROM LEGAL_CASE
+            WHERE LEAD_PARTNER_ID = ?
+            ORDER BY CASE_ID
+            """;
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, lawyerId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    cases.add(mapCase(rs));
+                }
             }
         }
 

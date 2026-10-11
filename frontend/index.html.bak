@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lexora | Law Firm Management</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<section id="loginScreen" class="login-screen" hidden>
+    <div class="login-card">
+        <div class="brand">LEXORA<span>.</span></div>
+        <p class="eyebrow">SECURE ACCESS</p>
+        <h1>Welcome back.</h1>
+        <p class="muted">Sign in to access your law firm workspace.</p>
+
+        <form id="loginForm">
+            <label for="loginUsername">Username</label>
+            <input
+                    id="loginUsername"
+                    name="username"
+                    type="text"
+                    autocomplete="username"
+                    required
+            >
+
+            <label for="loginPassword">Password</label>
+            <input
+                    id="loginPassword"
+                    name="password"
+                    type="password"
+                    autocomplete="current-password"
+                    required
+            >
+
+            <button id="loginButton" type="submit">Sign in</button>
+            <p id="loginMessage" role="status" aria-live="polite"></p>
+        </form>
+    </div>
+</section>
+<aside class="sidebar">
+    <div class="brand">LEXORA<span>.</span></div>
+    <p class="nav-label">WORKSPACE</p>
+    <a class="nav-item active" href="#dashboard">Dashboard</a>
+    <a class="nav-item" href="#clients">Clients</a>
+    <a class="nav-item" href="#lawyers">Lawyers</a>
+    <a class="nav-item" href="#appointments">Appointments</a>
+    <a class="nav-item" href="#cases">Legal Cases</a>
+    <a class="nav-item" href="#branches">Branch Workload</a>
+    <a class="nav-item" href="#documents">Documents</a>
+    <a class="nav-item" href="#notifications">Notifications</a>
+
+    <div class="sidebar-footer">
+        Law Firm Management<br>
+        <small>Administration Portal</small>
+    </div>
+</aside>
+
+<main class="main">
+    <!-- DASHBOARD HEADER -->
+    <header class="topbar" id="dashboard">
+        <div>
+            <p class="eyebrow">WORKSPACE / OVERVIEW</p>
+            <h1>Good morning.</h1>
+            <p class="muted">Here's what's happening at your firm.</p>
+        </div>
+        <div class="account-controls">
+            <div class="admin-badge">
+                <span></span>
+                <span id="currentUserLabel">Not signed in</span>
+            </div>
+            <button id="logoutButton" type="button">Log out</button>
+        </div>
+    </header>
+
+    <!-- DASHBOARD STATISTICS -->
+    <section class="stats">
+        <article class="stat-card">
+            <p>Total Clients</p>
+            <h2 id="clientCount">—</h2>
+            <small>Registered clients</small>
+        </article>
+        <article class="stat-card">
+            <p>Legal Team</p>
+            <h2 id="lawyerCountStat">—</h2>
+            <small>Lawyers and associates</small>
+        </article>
+        <article class="stat-card">
+            <p>Appointments</p>
+            <h2 id="appointmentCount">—</h2>
+            <small>Scheduled consultations</small>
+        </article>
+        <article class="stat-card">
+            <p>Active Cases</p>
+            <h2 id="activeCaseCount">—</h2>
+            <small>Cases in progress</small>
+        </article>
+    </section>
+
+    <!-- CLIENT MANAGEMENT -->
+    <section class="panel" id="clients">
+        <div class="panel-heading">
+            <div>
+                <p class="eyebrow">DIRECTORY</p>
+                <h2>Client management</h2>
+                <p class="muted">Client records from the Oracle database.</p>
+            </div>
+            <button id="refreshButton" type="button">Refresh records ↻</button>
+        </div>
+        <div id="message" class="message">Connecting to database…</div>
+        <form id="clientForm" class="client-form">
+            <input id="fullName" type="text" placeholder="Full name" required>
+            <input id="email" type="email" placeholder="Email address" required>
+            <button type="submit">Add Client +</button>
+        </form>
+
+        <div class="account-creation">
+            <h3>Create Client Login</h3>
+            <p class="muted">Create login credentials for an existing client.</p>
+
+            <div id="clientAccountMessage" class="message" role="status">
+                Select a client to create an account.
+            </div>
+
+            <form id="clientAccountForm" class="client-form">
+                <select id="accountClientId" required>
+                    <option value="">Select existing client</option>
+                </select>
+
+                <input
+                        id="accountUsername"
+                        type="text"
+                        placeholder="Login username"
+                        maxlength="100"
+                        autocomplete="off"
+                        required
+                >
+
+                <input
+                        id="accountPassword"
+                        type="password"
+                        placeholder="Temporary password (12+ characters)"
+                        minlength="12"
+                        autocomplete="new-password"
+                        required
+                >
+
+                <button id="createClientAccountButton" type="submit">
+                    Create Client Login
+                </button>
+            </form>
+        </div>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>CLIENT ID</th>
+                    <th>FULL NAME</th>
+                    <th>EMAIL ADDRESS</th>
+                    <th>ACTIONS</th>
+                </tr>
+                </thead>
+                <tbody id="clientTable">
+                <tr><td colspan="4">Loading client records…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- LAWYER DIRECTORY -->
+
+    <!-- LAWYER DIRECTORY -->
+    <section class="panel" id="lawyers">
+        <div class="panel-heading">
+            <div>
+                <p class="eyebrow">LEGAL TEAM</p>
+                <h2>Lawyer Directory</h2>
+                <p class="muted">Search and filter lawyers by your requirements.</p>
+            </div>
+            <span id="lawyerCount">0 lawyers</span>
+        </div>
+
+        <form id="addLawyerForm" class="client-form">
+            <input
+                    type="text"
+                    id="newLawyerName"
+                    placeholder="Lawyer full name"
+                    required
+            >
+
+            <input
+                    type="text"
+                    id="newLawyerSpecialization"
+                    placeholder="Specialization"
+                    required
+            >
+
+            <input
+                    type="number"
+                    id="newLawyerExperience"
+                    placeholder="Experience in years"
+                    min="0"
+                    required
+            >
+
+            <input
+                    type="number"
+                    id="newLawyerFee"
+                    placeholder="Consultation fee"
+                    min="0"
+                    step="0.01"
+                    required
+            >
+
+            <input
+                    type="number"
+                    id="newLawyerBranch"
+                    placeholder="Branch ID"
+                    min="1"
+                    required
+            >
+
+            <select id="newLawyerRole" required>
+                <option value="">Select designation</option>
+                <option value="Partner">Partner</option>
+                <option value="Associate">Associate</option>
+                <option value="Paralegal">Paralegal</option>
+                <option value="Intern">Intern</option>
+            </select>
+
+            <input
+                    type="text"
+                    id="newLawyerLanguages"
+                    placeholder="Languages (e.g. English,Tamil)"
+            >
+
+            <button type="submit">Add Lawyer +</button>
+        </form>
+
+        <p id="addLawyerMessage" role="status"></p>
+
+
+        <!-- Lawyer Filters -->
+        <form id="lawyerFilterForm" class="client-form">
+            <input
+                    type="text"
+                    id="lawyerSearch"
+                    placeholder="Search lawyer name"
+            >
+
+            <input
+                    type="text"
+                    id="specializationFilter"
+                    placeholder="Specialization"
+            >
+
+            <input
+                    type="number"
+                    id="experienceFilter"
+                    min="0"
+                    placeholder="Minimum experience (years)"
+            >
+
+            <input
+                    type="number"
+                    id="maxFeeFilter"
+                    min="0"
+                    placeholder="Maximum consultation fee"
+            >
+
+            <button type="submit">Apply Filters</button>
+            <button type="button" id="clearLawyerFilters">Clear Filters</button>
+        </form>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Specialization</th>
+                    <th>Experience</th>
+                    <th>Consultation Fee</th>
+                    <th>Actions</th>
+                </tr>
+                </thead>
+                <tbody id="lawyerTable">
+                <tr>
+                    <td colspan="6">Loading lawyers...</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+
+    <!-- APPOINTMENT MANAGEMENT -->
+    <section class="panel" id="appointments">
+        <div class="panel-heading">
+            <div>
+                <p class="eyebrow">CONSULTATIONS</p>
+                <h2>Book Appointment</h2>
+                <p class="muted">Book and manage client consultations.</p>
+            </div>
+            <button id="refreshAppointmentsButton" type="button">Refresh appointments ↻</button>
+        </div>
+        <div id="appointmentMessage" class="message">Appointments will appear here.</div>
+        <form id="appointmentForm" class="appointment-form">
+            <select id="appointmentClientId" required>
+                <option value="">Client Name</option>
+            </select>
+            <select id="appointmentLawyerId" required>
+                <option value="">Lawyer Name</option>
+            </select>
+            <label class="appointment-date-label" for="appointmentDateTime">Date and time</label>
+            <input id="appointmentDateTime" type="datetime-local" required>
+            <select id="appointmentMode" required>
+                <option value="Online">Online</option>
+                <option value="Physical">Physical</option>
+            </select>
+            <button type="submit">Book Appointment +</button>
+        </form>
+        <div class="table-wrap appointment-table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>APPOINTMENT ID</th>
+                    <th>CLIENT NAME</th>
+                    <th>LAWYER NAME</th>
+                    <th>DATE</th>
+                    <th>TIME</th>
+                    <th>MODE</th>
+                    <th>STATUS</th>
+                    <th>ACTION</th>
+                </tr>
+                </thead>
+                <tbody id="appointmentTable">
+                <tr><td colspan="8">Loading appointments...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- LEGAL CASES -->
+
+    <section id="cases" class="content-section">
+        <h2>Legal Cases</h2>
+        <p>Create and manage legal cases.</p>
+
+        <div class="card">
+            <h3>Add Legal Case</h3>
+
+            <form id="caseForm">
+                <label for="caseClientId">Client</label>
+                <select id="caseClientId" required>
+                    <option value="">Select client</option>
+                </select>
+
+                <label for="caseLeadPartnerId">Lead Lawyer</label>
+                <select id="caseLeadPartnerId">
+                    <option value="">No lead lawyer</option>
+                </select>
+
+                <label for="caseCategory">Category</label>
+                <input id="caseCategory" type="text"
+                       placeholder="e.g. Corporate Law" required>
+
+                <label for="caseBudget">Budget</label>
+                <input id="caseBudget" type="number"
+                       min="0" step="0.01" required>
+
+                <label for="caseStatus">Status</label>
+                <select id="caseStatus" required>
+                    <option value="Open">Open</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Closed">Closed</option>
+                </select>
+
+                <label for="caseComplexity">Complexity</label>
+                <select id="caseComplexity" required>
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Critical">Critical</option>
+                </select>
+
+                <button type="submit">Add Case</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3>Case Records</h3>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Case ID</th>
+                        <th>Client ID</th>
+                        <th>Lead Lawyer ID</th>
+                        <th>Category</th>
+                        <th>Budget</th>
+                        <th>Status</th>
+                        <th>Complexity</th>
+                        <th>Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody id="caseTable">
+                    <tr>
+                        <td colspan="8">Loading cases...</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card recommendation-card">
+            <h3>Recommended Lawyers</h3>
+            <p>
+                Find suitable lawyers based on specialization,
+                experience, workload, and branch capacity.
+            </p>
+
+            <form id="recommendationForm">
+                <label for="recommendationCategory">
+                    Case Category
+                </label>
+
+                <input
+                        type="text"
+                        id="recommendationCategory"
+                        placeholder="e.g. Contract"
+                        required
+                />
+
+                <button type="submit">
+                    Find Recommended Lawyers
+                </button>
+            </form>
+
+            <p id="recommendationMessage"></p>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Lawyer</th>
+                        <th>Specialization</th>
+                        <th>Experience</th>
+                        <th>Active Cases</th>
+                        <th>Branch</th>
+                        <th>Score</th>
+                        <th>Reasons</th>
+                    </tr>
+                    </thead>
+                    <tbody id="recommendationTable">
+                    <tr>
+                        <td colspan="7">
+                            Enter a case category to find recommendations.
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </section>
+
+
+    <!-- BRANCH WORKLOAD -->
+    <section class="panel" id="branches">
+        <div class="section-header">
+            <div>
+                <h2>Branch Workload</h2>
+                <p>Monitor branch capacity, lawyers, and active cases.</p>
+            </div>
+            <button id="refreshBranchesButton" type="button">Refresh Workload</button>
+        </div>
+        <p id="branchMessage" role="status"></p>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                <tr>
+                    <th>Branch ID</th>
+                    <th>Branch Name</th>
+                    <th>Location</th>
+                    <th>Max Capacity</th>
+                    <th>Lawyers</th>
+                    <th>Active Cases</th>
+                    <th>Available Slots</th>
+                    <th>Capacity Utilization</th>
+                    <th>Workload Status</th>
+                </tr>
+                </thead>
+                <tbody id="branchTable">
+                <tr>
+                    <td colspan="9">Loading branch workload...</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+    </section>
+
+    <!-- DOCUMENT MANAGEMENT -->
+    <section class="panel" id="documents">
+        <div class="panel-heading">
+            <div>
+                <p class="eyebrow">CASE FILES</p>
+                <h2>Document Management</h2>
+                <p class="muted">Register and manage document records linked to legal cases.</p>
+            </div>
+            <button id="refreshDocumentsButton" type="button">Refresh documents ↻</button>
+        </div>
+        <div id="documentMessage" class="message">Loading document records...</div>
+        <form id="documentForm" class="client-form">
+            <select id="documentCaseId" required>
+                <option value="">Select legal case</option>
+            </select>
+            <input id="documentUploader" type="text" placeholder="Uploaded by" required>
+            <input id="documentCategory" type="text" placeholder="Document category" required>
+            <button type="submit">Register Document +</button>
+        </form>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>DOCUMENT ID</th>
+                    <th>CASE ID</th>
+                    <th>UPLOADED BY</th>
+                    <th>CATEGORY</th>
+                    <th>UPLOAD DATE</th>
+                    <th>ACTION</th>
+                </tr>
+                </thead>
+                <tbody id="documentTable">
+                <tr><td colspan="6">Loading documents...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- NOTIFICATION MANAGEMENT -->
+    <section class="panel" id="notifications">
+        <div class="panel-heading">
+            <div>
+                <p class="eyebrow">COMMUNICATIONS</p>
+                <h2>Notifications</h2>
+                <p class="muted">View notifications and manage read status.</p>
+            </div>
+            <button id="refreshNotificationsButton" type="button">Refresh notifications ↻</button>
+        </div>
+        <div id="notificationMessage" class="message">Loading notifications...</div>
+        <form id="notificationForm" class="client-form">
+            <input id="notificationRecipientId" type="number" min="1" placeholder="Recipient ID" required>
+            <select id="notificationRecipientType" required>
+                <option value="">Recipient type</option>
+                <option value="Client">Client</option>
+                <option value="Lawyer">Lawyer</option>
+
+            </select>
+            <input id="notificationText" type="text" placeholder="Notification message" required>
+            <button type="submit">Create Notification +</button>
+        </form>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>RECIPIENT ID</th>
+                    <th>TYPE</th>
+                    <th>MESSAGE</th>
+                    <th>SENT ON</th>
+                    <th>READ</th>
+                    <th>ACTION</th>
+                </tr>
+                </thead>
+                <tbody id="notificationTable">
+                <tr><td colspan="7">Loading notifications...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <footer>LEXORA · Integrated Law Firm Management Platform</footer>
+</main>
+
+<script src="/app.js" defer></script>
+</body>
+</html>

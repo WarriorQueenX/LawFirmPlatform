@@ -37,6 +37,10 @@ public class Server {
         server.createContext("/api/auth/login", new AuthHandler());
         server.createContext("/api/auth/session", new SessionHandler());
         server.createContext("/api/client-accounts", new AuthGuard(new ClientAccountHandler(), "ADMIN"));
+        server.createContext("/api/lawyer-accounts",
+                new AuthGuard(new LawyerAccountHandler(), "ADMIN"));
+
+
 
         server.createContext(
                 "/api/lawyer-directory",

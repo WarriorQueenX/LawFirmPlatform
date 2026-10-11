@@ -1,7 +1,7 @@
-
 package com.lawfirm.controller;
 
 import com.lawfirm.dao.CaseDAO;
+import com.lawfirm.util.SessionManager;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
@@ -20,21 +20,62 @@ public class CaseHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
         try {
-            switch (exchange.getRequestMethod()) {
-                case "GET" -> getCases(exchange);
-                case "POST" -> addCase(exchange);
-                case "PUT" -> updateCase(exchange);
-                case "DELETE" -> deleteCase(exchange);
-                default -> send(exchange, 405,
-                        "{\"error\":\"Method not allowed\"}");
+            SessionManager.Session session = getSession(exchange);
+
+            if (session == null) {
+                send(exchange, 401,
+                        "{\"error\":\"Authentication required\"}");
+                return;
             }
+
+            String method = exchange.getRequestMethod();
+            String role = session.role;
+
+            switch (method) {
+                case "GET" -> getCases(exchange, session);
+
+                case "POST" -> {
+                    if (!isAdmin(role) && !"BRANCH_MANAGER".equals(role)) {
+                        send(exchange, 403,
+                                "{\"error\":\"You cannot create cases\"}");
+                        return;
+                    }
+                    addCase(exchange);
+                }
+
+                case "PUT" -> {
+                    if (!isAdmin(role) && !"BRANCH_MANAGER".equals(role)) {
+                        send(exchange, 403,
+                                "{\"error\":\"You cannot update cases\"}");
+                        return;
+                    }
+                    updateCase(exchange);
+                }
+
+                case "DELETE" -> {
+                    if (!isAdmin(role) && !"BRANCH_MANAGER".equals(role)) {
+                        send(exchange, 403,
+                                "{\"error\":\"You cannot delete cases\"}");
+                        return;
+                    }
+                    deleteCase(exchange);
+                }
+
+                default -> {
+                    exchange.getResponseHeaders().set(
+                            "Allow", "GET, POST, PUT, DELETE, OPTIONS");
+                    send(exchange, 405,
+                            "{\"error\":\"Method not allowed\"}");
+                }
+            }
+
         } catch (IllegalArgumentException e) {
             send(exchange, 400,
                     "{\"error\":\"Invalid case data. Check all fields.\"}");
         } catch (SQLException e) {
             e.printStackTrace();
             send(exchange, 500,
-                    "{\"error\":\"Case database operation failed. Check server logs and database constraints.\"}");
+                    "{\"error\":\"Case database operation failed. Check server logs.\"}");
         } catch (Exception e) {
             e.printStackTrace();
             send(exchange, 500,
@@ -44,14 +85,67 @@ public class CaseHandler implements HttpHandler {
         }
     }
 
-    private void getCases(HttpExchange exchange)
-            throws SQLException, IOException {
+    private SessionManager.Session getSession(HttpExchange exchange) {
+        String cookieHeader =
+                exchange.getRequestHeaders().getFirst("Cookie");
 
-        List<Map<String, Object>> cases = CaseDAO.getAllCases();
+        if (cookieHeader == null) {
+            return null;
+        }
+
+        for (String cookie : cookieHeader.split(";")) {
+            String[] parts = cookie.trim().split("=", 2);
+
+            if (parts.length == 2
+                    && "LEXORA_SESSION".equals(parts[0])) {
+                return SessionManager.getSession(parts[1]);
+            }
+        }
+
+        return null;
+    }
+
+    private boolean isAdmin(String role) {
+        return "ADMIN".equals(role);
+    }
+
+    private void getCases(
+            HttpExchange exchange,
+            SessionManager.Session session
+    ) throws SQLException, IOException {
+
+        List<Map<String, Object>> cases;
+
+        if ("ADMIN".equals(session.role)
+                || "BRANCH_MANAGER".equals(session.role)) {
+
+            cases = CaseDAO.getAllCases();
+
+        } else if ("LAWYER".equals(session.role)) {
+
+            if (session.lawyerId == null) {
+                send(exchange, 403,
+                        "{\"error\":\"Lawyer account is not linked to a lawyer profile\"}");
+                return;
+            }
+
+            int lawyerId = Integer.parseInt(
+                    session.lawyerId.toString());
+
+            cases = CaseDAO.getCasesByLawyer(lawyerId);
+
+        } else {
+            send(exchange, 403,
+                    "{\"error\":\"You do not have permission to view cases\"}");
+            return;
+        }
+
         StringBuilder json = new StringBuilder("[");
 
         for (int i = 0; i < cases.size(); i++) {
-            if (i > 0) json.append(",");
+            if (i > 0) {
+                json.append(",");
+            }
 
             Map<String, Object> c = cases.get(i);
 
@@ -114,7 +208,8 @@ public class CaseHandler implements HttpHandler {
         );
 
         if (!updated) {
-            send(exchange, 404, "{\"error\":\"Case not found\"}");
+            send(exchange, 404,
+                    "{\"error\":\"Case not found\"}");
             return;
         }
 
@@ -131,7 +226,8 @@ public class CaseHandler implements HttpHandler {
         boolean deleted = CaseDAO.deleteCase(caseId);
 
         if (!deleted) {
-            send(exchange, 404, "{\"error\":\"Case not found\"}");
+            send(exchange, 404,
+                    "{\"error\":\"Case not found\"}");
             return;
         }
 
@@ -146,7 +242,9 @@ public class CaseHandler implements HttpHandler {
             String status,
             String complexity) {
 
-        if (clientId <= 0 || category.isBlank() || budget.signum() < 0) {
+        if (clientId <= 0
+                || category.isBlank()
+                || budget.signum() < 0) {
             throw new IllegalArgumentException();
         }
 
@@ -247,7 +345,9 @@ public class CaseHandler implements HttpHandler {
     }
 
     private String escape(Object value) {
-        if (value == null) return "";
+        if (value == null) {
+            return "";
+        }
 
         return value.toString()
                 .replace("\\", "\\\\")
@@ -264,7 +364,8 @@ public class CaseHandler implements HttpHandler {
     private void send(
             HttpExchange exchange,
             int status,
-            String body) throws IOException {
+            String body
+    ) throws IOException {
 
         byte[] data = body.getBytes(StandardCharsets.UTF_8);
 
