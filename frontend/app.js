@@ -179,6 +179,7 @@ async function loadLawyers() {
 
         lawyersCache = lawyers;
         renderLawyers(lawyers);
+        populateAppointmentDropdowns();
 
     } catch (error) {
         table.innerHTML =
@@ -295,39 +296,29 @@ document.getElementById("clearLawyerFilters")
 
 
 // LEGAL CASES
+
 async function loadCases() {
     try {
         const cases = await requestJSON(CASE_API);
-        caseTable.replaceChildren();
-        caseCount.textContent = `${cases.length} cases`;
 
-        if ($("activeCaseCount")) {
-            $("activeCaseCount").textContent = cases.filter(
+        if (caseCount) {
+            caseCount.textContent = `${cases.length} cases`;
+        }
+
+        const activeCaseCount = $("activeCaseCount");
+        if (activeCaseCount) {
+            activeCaseCount.textContent = cases.filter(
                 item => !["Completed", "Closed"].includes(item.status)
             ).length;
         }
-
-        if (!cases.length) {
-            caseTable.innerHTML =
-                '<tr><td colspan="5">No legal cases found.</td></tr>';
-        }
-
-        cases.forEach(item => {
-            const row = document.createElement("tr");
-            addCell(row, item.caseId);
-            addCell(row, item.clientId);
-            addCell(row, item.category);
-            addCell(row, item.status);
-            addCell(row, item.complexity);
-            caseTable.appendChild(row);
-        });
     } catch (error) {
-        caseCount.textContent = "Unavailable";
-        caseTable.innerHTML =
-            '<tr><td colspan="5">Unable to load legal cases.</td></tr>';
+        if (caseCount) {
+            caseCount.textContent = "Unavailable";
+        }
         console.error("Case loading failed:", error);
     }
 }
+
 
 // APPOINTMENT DROPDOWNS: show names, submit IDs
 function populateAppointmentDropdowns() {
@@ -821,6 +812,7 @@ loadNotifications();
 
 const BRANCH_API = "/api/branches";
 
+
 async function loadBranches() {
     const table = document.getElementById("branchTable");
     const message = document.getElementById("branchMessage");
@@ -828,16 +820,16 @@ async function loadBranches() {
     if (!table) return;
 
     table.innerHTML =
-        '<tr><td colspan="6">Loading branch workload...</td></tr>';
+        '<tr><td colspan="9">Loading branch workload...</td></tr>';
 
     try {
         const branches = await requestJSON(BRANCH_API);
-
-        table.innerHTML = "";
+        table.replaceChildren();
 
         if (!branches.length) {
             table.innerHTML =
-                '<tr><td colspan="6">No branch records found.</td></tr>';
+                '<tr><td colspan="9">No branch records found.</td></tr>';
+
             if (message) message.textContent = "";
             return;
         }
@@ -851,8 +843,21 @@ async function loadBranches() {
                 branch.location,
                 branch.maxCapacity,
                 branch.lawyerCount,
-                branch.activeCases
+                branch.activeCases,
+                branch.availableSlots,
+                `${Number(branch.capacityUtilization).toFixed(1)}%`
             ].forEach(value => addCell(row, value ?? "—"));
+
+            const statusCell = addCell(row, branch.workloadStatus ?? "Unknown");
+            statusCell.className = "workload-status";
+
+            if (branch.workloadStatus === "At Capacity") {
+                statusCell.classList.add("status-full");
+            } else if (branch.workloadStatus === "Near Capacity") {
+                statusCell.classList.add("status-warning");
+            } else {
+                statusCell.classList.add("status-available");
+            }
 
             table.appendChild(row);
         });
@@ -863,15 +868,14 @@ async function loadBranches() {
         }
     } catch (error) {
         table.innerHTML =
-            '<tr><td colspan="6">Unable to load branch workload.</td></tr>';
+            '<tr><td colspan="9">Unable to load branch workload.</td></tr>';
 
-        if (message) {
-            message.textContent = error.message;
-        }
+        if (message) message.textContent = error.message;
 
         console.error("Branch workload error:", error);
     }
 }
+
 
 document
     .getElementById("refreshBranchesButton")
@@ -1076,5 +1080,286 @@ async function deleteLawyer(lawyer) {
             error.message
         );
     }
+}
+
+
+const LEGAL_CASE_API = "/api/cases";
+
+async function loadLegalCases() {
+    const table = document.getElementById("caseTable");
+    if (!table) return;
+
+    table.innerHTML = '<tr><td colspan="8">Loading cases...</td></tr>';
+
+    try {
+        const response = await fetch(LEGAL_CASE_API);
+        if (!response.ok) throw new Error("Unable to load legal cases");
+
+        const cases = await response.json();
+
+        table.innerHTML = "";
+
+        if (cases.length === 0) {
+            table.innerHTML =
+                '<tr><td colspan="8">No legal cases found.</td></tr>';
+            return;
+        }
+
+        cases.forEach(legalCase => {
+            const row = document.createElement("tr");
+
+            [
+                legalCase.caseId,
+                legalCase.clientId,
+                legalCase.leadPartnerId ?? "—",
+                legalCase.category,
+                legalCase.budget ?? "—",
+                legalCase.status,
+                legalCase.complexity
+            ].forEach(value => addCell(row, value ?? "—"));
+
+            const actions = document.createElement("td");
+
+            const editButton = document.createElement("button");
+            editButton.type = "button";
+            editButton.textContent = "Edit";
+            editButton.addEventListener(
+                "click",
+                () => editLegalCase(legalCase)
+            );
+
+            const deleteButton = document.createElement("button");
+            deleteButton.type = "button";
+            deleteButton.textContent = "Delete";
+            deleteButton.addEventListener(
+                "click",
+                () => deleteLegalCase(legalCase.caseId)
+            );
+
+            actions.append(editButton, document.createTextNode(" "), deleteButton);
+            row.appendChild(actions);
+            table.appendChild(row);
+        });
+    } catch (error) {
+        console.error(error);
+        table.innerHTML =
+            '<tr><td colspan="8">Failed to load cases. Check the server.</td></tr>';
+    }
+}
+
+async function populateCaseDropdowns() {
+    const clientSelect = document.getElementById("caseClientId");
+    const lawyerSelect = document.getElementById("caseLeadPartnerId");
+
+    if (!clientSelect || !lawyerSelect) return;
+
+    try {
+        const [clientsResponse, lawyersResponse] = await Promise.all([
+            fetch("/api/clients"),
+            fetch("/api/lawyers")
+        ]);
+
+        if (!clientsResponse.ok || !lawyersResponse.ok) {
+            throw new Error("Unable to load clients or lawyers");
+        }
+
+        const clients = await clientsResponse.json();
+        const lawyers = await lawyersResponse.json();
+
+        clientSelect.replaceChildren(
+            new Option("Select client", "")
+        );
+
+        clients.forEach(client => {
+            clientSelect.add(
+                new Option(client.fullName, client.clientId)
+            );
+        });
+
+        lawyerSelect.replaceChildren(
+            new Option("No lead lawyer", "")
+        );
+
+        lawyers.forEach(lawyer => {
+            lawyerSelect.add(
+                new Option(lawyer.fullName, lawyer.lawyerId)
+            );
+        });
+    } catch (error) {
+        console.error("Case dropdown error:", error);
+        alert("Could not load clients and lawyers for the case form.");
+    }
+}
+
+async function submitLegalCase(event) {
+    event.preventDefault();
+
+    const clientId = Number(
+        document.getElementById("caseClientId").value
+    );
+    const leadValue =
+        document.getElementById("caseLeadPartnerId").value;
+    const category =
+        document.getElementById("caseCategory").value.trim();
+    const budget = Number(
+        document.getElementById("caseBudget").value
+    );
+    const status =
+        document.getElementById("caseStatus").value;
+    const complexity =
+        document.getElementById("caseComplexity").value;
+
+    if (
+        !Number.isInteger(clientId) ||
+        clientId <= 0 ||
+        !category ||
+        !Number.isFinite(budget) ||
+        budget < 0
+    ) {
+        alert("Please enter valid case details.");
+        return;
+    }
+
+    const payload = {
+        clientId,
+        leadPartnerId: leadValue ? Number(leadValue) : null,
+        category,
+        budget,
+        status,
+        complexity
+    };
+
+    try {
+        const response = await fetch(LEGAL_CASE_API, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || "Unable to create case");
+        }
+
+        alert("Legal case created successfully.");
+        document.getElementById("caseForm").reset();
+        await loadCases();
+        await loadLegalCases();
+    } catch (error) {
+        alert("Create case failed: " + error.message);
+    }
+    alert("Legal case created successfully.");
+    document.getElementById("caseForm").reset();
+
+    await loadLegalCases();
+    await loadCases();
+    await loadAppointments();
+}
+
+async function editLegalCase(legalCase) {
+    const category = prompt("Case category:", legalCase.category);
+    if (category === null) return;
+
+    const budgetInput = prompt("Budget:", legalCase.budget ?? "0");
+    if (budgetInput === null) return;
+
+    const status = prompt(
+        "Status (Open, In Progress, Closed):",
+        legalCase.status
+    );
+    if (status === null) return;
+
+    const complexity = prompt(
+        "Complexity (Low, Medium, High, Critical):",
+        legalCase.complexity
+    );
+    if (complexity === null) return;
+
+    const budget = Number(budgetInput);
+
+    if (!category.trim() || !Number.isFinite(budget) || budget < 0) {
+        alert("Enter a valid category and non-negative budget.");
+        return;
+    }
+
+    if (!["Open", "In Progress", "Closed"].includes(status)) {
+        alert("Invalid case status.");
+        return;
+    }
+
+    if (!["Low", "Medium", "High", "Critical"].includes(complexity)) {
+        alert("Invalid case complexity.");
+        return;
+    }
+
+    const payload = {
+        caseId: Number(legalCase.caseId),
+        clientId: Number(legalCase.clientId),
+        leadPartnerId: legalCase.leadPartnerId == null
+            ? null
+            : Number(legalCase.leadPartnerId),
+        category: category.trim(),
+        budget,
+        status,
+        complexity
+    };
+
+    try {
+        const response = await fetch(LEGAL_CASE_API, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || "Unable to update case");
+        }
+
+        alert("Legal case updated successfully.");
+        await loadLegalCases();
+        await refreshDashboard();
+    } catch (error) {
+        alert("Update case failed: " + error.message);
+    }
+}
+
+async function deleteLegalCase(caseId) {
+    if (!confirm(`Delete legal case ${caseId}? This cannot be undone.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(LEGAL_CASE_API, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ caseId: Number(caseId) })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || "Unable to delete case");
+        }
+
+        alert("Legal case deleted successfully.");
+        await loadLegalCases();
+        await refreshDashboard();
+    } catch (error) {
+        alert(
+            "Delete failed. The case may be referenced by other records.\n" +
+            error.message
+        );
+    }
+}
+
+const caseForm = document.getElementById("caseForm");
+
+if (caseForm) {
+    caseForm.addEventListener("submit", submitLegalCase);
+    populateCaseDropdowns();
+    loadLegalCases();
 }
 

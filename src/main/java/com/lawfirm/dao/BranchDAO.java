@@ -24,7 +24,7 @@ public class BranchDAO {
                 b.MAX_CAPACITY,
                 COUNT(DISTINCT l.LAWYER_ID) AS LAWYER_COUNT,
                 COUNT(DISTINCT CASE
-                    WHEN c.STATUS IN ('Open', 'In Progress', 'Pending')
+                    WHEN c.STATUS IN ('Open', 'In Progress')
                     THEN c.CASE_ID
                 END) AS ACTIVE_CASES
             FROM BRANCH b
@@ -47,12 +47,38 @@ public class BranchDAO {
             while (rs.next()) {
                 Map<String, Object> branch = new LinkedHashMap<>();
 
-                branch.put("branchId", rs.getInt("BRANCH_ID"));
+                int branchId = rs.getInt("BRANCH_ID");
+                int maxCapacity = rs.getInt("MAX_CAPACITY");
+                int lawyerCount = rs.getInt("LAWYER_COUNT");
+                int activeCases = rs.getInt("ACTIVE_CASES");
+
+                double utilization = maxCapacity > 0
+                        ? (lawyerCount * 100.0) / maxCapacity
+                        : 0.0;
+
+                String workloadStatus;
+
+                if (maxCapacity <= 0) {
+                    workloadStatus = "Capacity Not Set";
+                } else if (lawyerCount >= maxCapacity) {
+                    workloadStatus = "At Capacity";
+                } else if (utilization >= 80.0) {
+                    workloadStatus = "Near Capacity";
+                } else {
+                    workloadStatus = "Available";
+                }
+
+                branch.put("branchId", branchId);
                 branch.put("branchName", rs.getString("BRANCH_NAME"));
                 branch.put("location", rs.getString("LOCATION"));
-                branch.put("maxCapacity", rs.getInt("MAX_CAPACITY"));
-                branch.put("lawyerCount", rs.getInt("LAWYER_COUNT"));
-                branch.put("activeCases", rs.getInt("ACTIVE_CASES"));
+                branch.put("maxCapacity", maxCapacity);
+                branch.put("lawyerCount", lawyerCount);
+                branch.put("activeCases", activeCases);
+                branch.put("availableSlots",
+                        Math.max(0, maxCapacity - lawyerCount));
+                branch.put("capacityUtilization",
+                        Math.round(utilization * 100.0) / 100.0);
+                branch.put("workloadStatus", workloadStatus);
 
                 branches.add(branch);
             }

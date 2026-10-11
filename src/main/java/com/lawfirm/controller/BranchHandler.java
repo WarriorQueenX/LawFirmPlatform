@@ -19,7 +19,8 @@ public class BranchHandler implements HttpHandler {
         try {
             if (!exchange.getRequestMethod().equals("GET")) {
                 exchange.getResponseHeaders().set("Allow", "GET");
-                send(exchange, 405, "{\"error\":\"Method not allowed\"}");
+                send(exchange, 405,
+                        "{\"error\":\"Method not allowed\"}");
                 return;
             }
 
@@ -27,29 +28,43 @@ public class BranchHandler implements HttpHandler {
                     BranchDAO.getBranchWorkload();
 
             StringBuilder json = new StringBuilder("[");
-            for (int i = 0; i < branches.size(); i++) {
-                Map<String, Object> branch = branches.get(i);
 
+            for (int i = 0; i < branches.size(); i++) {
                 if (i > 0) {
                     json.append(",");
                 }
 
+                Map<String, Object> branch = branches.get(i);
+
                 json.append("{")
-                        .append("\"branchId\":").append(branch.get("branchId")).append(",")
-                        .append("\"branchName\":").append(quote(branch.get("branchName"))).append(",")
-                        .append("\"location\":").append(quote(branch.get("location"))).append(",")
-                        .append("\"maxCapacity\":").append(branch.get("maxCapacity")).append(",")
-                        .append("\"lawyerCount\":").append(branch.get("lawyerCount")).append(",")
-                        .append("\"activeCases\":").append(branch.get("activeCases"))
+                        .append("\"branchId\":")
+                        .append(branch.get("branchId")).append(",")
+                        .append("\"branchName\":")
+                        .append(quote(branch.get("branchName"))).append(",")
+                        .append("\"location\":")
+                        .append(quote(branch.get("location"))).append(",")
+                        .append("\"maxCapacity\":")
+                        .append(branch.get("maxCapacity")).append(",")
+                        .append("\"lawyerCount\":")
+                        .append(branch.get("lawyerCount")).append(",")
+                        .append("\"activeCases\":")
+                        .append(branch.get("activeCases")).append(",")
+                        .append("\"availableSlots\":")
+                        .append(branch.get("availableSlots")).append(",")
+                        .append("\"capacityUtilization\":")
+                        .append(branch.get("capacityUtilization")).append(",")
+                        .append("\"workloadStatus\":")
+                        .append(quote(branch.get("workloadStatus")))
                         .append("}");
             }
-            json.append("]");
 
+            json.append("]");
             send(exchange, 200, json.toString());
 
         } catch (SQLException e) {
             e.printStackTrace();
-            send(exchange, 500, "{\"error\":\"Database error while loading branch workload\"}");
+            send(exchange, 500,
+                    "{\"error\":\"Database error while loading branch workload\"}");
         } finally {
             exchange.close();
         }
@@ -64,16 +79,24 @@ public class BranchHandler implements HttpHandler {
                 .replace("\\", "\\\\")
                 .replace("\"", "\\\"")
                 .replace("\n", "\\n")
-                .replace("\r", "\\r");
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
 
         return "\"" + text + "\"";
     }
 
-    private void send(HttpExchange exchange, int status, String response)
-            throws IOException {
+    private void send(
+            HttpExchange exchange,
+            int status,
+            String response) throws IOException {
+
         byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
+
         exchange.getResponseHeaders().set(
-                "Content-Type", "application/json; charset=UTF-8");
+                "Content-Type",
+                "application/json; charset=UTF-8"
+        );
+
         exchange.sendResponseHeaders(status, bytes.length);
 
         try (OutputStream os = exchange.getResponseBody()) {

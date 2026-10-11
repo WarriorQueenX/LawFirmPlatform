@@ -516,3 +516,177 @@ tbody tr:hover {
         width: 100%;
     }
 }
+
+#caseForm {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    align-items: center;
+}
+
+#caseForm label {
+    margin-bottom: -6px;
+}
+
+#caseForm input,
+#caseForm select {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+#caseForm button {
+    justify-self: start;
+    width: fit-content;
+}
+
+@media (max-width: 700px) {
+    #caseForm {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Legal Cases form layout */
+#caseForm {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 20px;
+    align-items: center;
+    max-width: 100%;
+}
+
+#caseForm label {
+    margin: 0;
+}
+
+#caseForm input,
+#caseForm select {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+#caseForm button {
+    justify-self: start;
+    width: fit-content;
+    min-width: 120px;
+}
+
+@media (max-width: 700px) {
+    #caseForm {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Legal Cases section styling */
+#cases {
+    background: #ffffff;
+    padding: 32px;
+    border-radius: 14px;
+    box-shadow: 0 2px 12px rgba(25, 35, 55, 0.06);
+    margin-bottom: 24px;
+}
+
+/* Form and table cards */
+#cases .card {
+    background: #ffffff;
+    padding: 24px;
+    border: 1px solid #e8e6e1;
+    border-radius: 12px;
+    margin-top: 20px;
+    margin-bottom: 24px;
+}
+
+/* Form spacing */
+#caseForm {
+    display: grid;
+    grid-template-columns: 180px minmax(0, 1fr);
+    gap: 14px 20px;
+    align-items: center;
+}
+
+#caseForm label {
+    margin: 0;
+    font-weight: 500;
+}
+
+#caseForm input,
+#caseForm select {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 40px;
+    padding: 9px 12px;
+    border: 1px solid #dedbd5;
+    border-radius: 7px;
+    background: #ffffff;
+}
+
+#caseForm button {
+    grid-column: 2;
+    justify-self: start;
+    min-width: 125px;
+}
+
+/* Case records table */
+#cases table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #ffffff;
+}
+
+#cases thead {
+    background: #f8f7f4;
+}
+
+#cases th,
+#cases td {
+    padding: 14px 16px;
+    text-align: left;
+    border-bottom: 1px solid #e8e6e1;
+}
+
+#cases th {
+    color: #777f8e;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+#cases tbody tr:hover {
+    background: #faf9f7;
+}
+
+@media (max-width: 700px) {
+    #cases {
+        padding: 18px;
+    }
+
+    #caseForm {
+        grid-template-columns: 1fr;
+    }
+
+    #caseForm button {
+        grid-column: 1;
+    }
+
+    #cases .card {
+        overflow-x: auto;
+    }
+}
+
+.workload-status {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.workload-status.status-available {
+    color: #26734d;
+}
+
+.workload-status.status-warning {
+    color: #a66a00;
+}
+
+.workload-status.status-full {
+    color: #b42318;
+}
+
