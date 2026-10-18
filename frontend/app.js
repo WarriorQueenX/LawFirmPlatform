@@ -1257,73 +1257,102 @@ async function deleteLawyer(lawyer) {
 
 const LEGAL_CASE_API = "/api/cases";
 
+
 async function loadLegalCases() {
     const table = document.getElementById("caseTable");
+    const count = document.getElementById("caseCount");
+
     if (!table) return;
 
-    table.innerHTML = '<tr><td colspan="8">Loading cases...</td></tr>';
+    table.innerHTML =
+        '<tr><td colspan="8">Loading cases...</td></tr>';
 
     try {
         const cases = await requestJSON(LEGAL_CASE_API);
+
+        if (!Array.isArray(cases)) {
+            throw new Error("The server did not return a case list.");
+        }
+
         table.replaceChildren();
 
-        if (!cases.length) {
+        if (count) {
+            count.textContent = `${cases.length} cases`;
+        }
+
+        if (cases.length === 0) {
             table.innerHTML =
                 '<tr><td colspan="8">No legal cases found.</td></tr>';
             return;
         }
 
+        const canManageCases = currentUser &&
+            ["ADMIN", "BRANCH_MANAGER", "LAWYER"]
+                .includes(currentUser.role);
+
         cases.forEach(legalCase => {
             const row = document.createElement("tr");
 
-            [
-                legalCase.caseId,
-                legalCase.clientId,
-                legalCase.leadPartnerId ?? "-",
-                legalCase.category,
-                legalCase.budget ?? "-",
-                legalCase.status,
-                legalCase.complexity
-            ].forEach(value => addCell(row, value ?? "-"));
+            // Seven data columns matching the table headings.
+            addCell(row, legalCase.caseId);
+            addCell(row, legalCase.clientId);
+            addCell(row, legalCase.leadPartnerId);
+            addCell(row, legalCase.category);
+            addCell(
+                row,
+                legalCase.budget == null
+                    ? "-"
+                    : Number(legalCase.budget).toLocaleString("en-IN")
+            );
+            addCell(row, legalCase.status);
+            addCell(row, legalCase.complexity);
 
+            // Eighth column: Actions.
             const actions = document.createElement("td");
 
-            const editButton = document.createElement("button");
-            editButton.type = "button";
-            editButton.textContent = "Edit";
-            editButton.addEventListener(
-                "click",
-                () => editLegalCase(legalCase)
-            );
-
-            const deleteButton = document.createElement("button");
-            deleteButton.type = "button";
-            deleteButton.textContent = "Delete";
-            deleteButton.addEventListener(
-                "click",
-                () => deleteLegalCase(legalCase.caseId)
-            );
-
-            actions.append(
-                editButton,
-                document.createTextNode(" "),
-                deleteButton
-            );
             if (canManageCases) {
-                row.appendChild(actions);
+                const editButton = document.createElement("button");
+                editButton.type = "button";
+                editButton.textContent = "Edit";
+                editButton.className = "edit-button";
+                editButton.addEventListener("click", () => {
+                    editLegalCase(legalCase);
+                });
+
+                const deleteButton = document.createElement("button");
+                deleteButton.type = "button";
+                deleteButton.textContent = "Delete";
+                deleteButton.className = "delete-button";
+                deleteButton.addEventListener("click", () => {
+                    deleteLegalCase(legalCase.caseId);
+                });
+
+                actions.append(
+                    editButton,
+                    document.createTextNode(" "),
+                    deleteButton
+                );
             } else {
-                row.appendChild(document.createElement("td"));
-                row.lastElementChild.hidden = true;
+                actions.textContent = "-";
             }
 
+            row.appendChild(actions);
             table.appendChild(row);
         });
+
     } catch (error) {
-        console.error(error);
+        console.error("Legal case loading failed:", error);
+
+        if (count) {
+            count.textContent = "Unavailable";
+        }
+
         table.innerHTML =
-            '<tr><td colspan="8">Failed to load cases. Check the server.</td></tr>';
+            '<tr><td colspan="8">Unable to display legal cases. ' +
+            'Check the browser console.</td></tr>';
     }
 }
+
 
 async function populateCaseDropdowns() {
     const clientSelect = document.getElementById("caseClientId");
